@@ -93,9 +93,7 @@ function Index() {
         <section className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-10">
           <div className="md:col-span-7">
             <p className="font-display text-2xl md:text-3xl leading-snug">
-              Envie suas faturas em PDF. Nossa equipe sintética de auditores extrai cada
-              linha, classifica em categorias, identifica parcelas em aberto e devolve
-              um <em className="text-accent">parecer ilustrado</em> sobre seu padrão de consumo.
+              <br />
             </p>
           </div>
           <aside className="md:col-span-5 md:border-l hairline border-rule md:pl-6">
