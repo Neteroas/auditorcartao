@@ -90,23 +90,6 @@ function Index() {
         </header>
 
         {/* Intro / methodology */}
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-10">
-          <div className="md:col-span-7">
-            <p className="font-display text-2xl md:text-3xl leading-snug">
-              <br />
-            </p>
-          </div>
-          <aside className="md:col-span-5 md:border-l hairline border-rule md:pl-6">
-            <p className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">Metodologia</p>
-            <ol className="mt-3 space-y-2 text-sm">
-              <li className="flex gap-3"><span className="font-mono text-accent">01</span> Leitura textual do PDF (OCR-livre).</li>
-              <li className="flex gap-3"><span className="font-mono text-accent">02</span> Reconhecimento de data, descrição, valor e parcela.</li>
-              <li className="flex gap-3"><span className="font-mono text-accent">03</span> Classificação heurística em 12+ categorias.</li>
-              <li className="flex gap-3"><span className="font-mono text-accent">04</span> Análise de padrão, anomalias e projeções.</li>
-            </ol>
-          </aside>
-        </section>
-
         <section className="mt-10">
           <UploadDropzone onFiles={handleFiles} busy={busy} />
           {error && (
