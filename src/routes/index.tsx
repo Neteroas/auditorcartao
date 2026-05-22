@@ -8,7 +8,7 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Atelier · Auditoria de Faturas de Cartão" },
+      { title: "Auditor · Auditoria de Faturas de Cartão" },
       { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights." },
     ],
     links: [
@@ -72,7 +72,7 @@ function Index() {
               Est. MMXXV · Auditoria & Inteligência Financeira
             </p>
             <h1 className="font-display text-5xl md:text-7xl mt-2 leading-[0.95]">
-              Atelier <em className="text-accent">Audita</em>
+              Auditor
             </h1>
             <p className="font-display italic text-lg text-muted-foreground mt-2">
               Um parecer sênior sobre cada lançamento da sua fatura.
@@ -122,7 +122,7 @@ function Index() {
         {txs.length > 0 && <Dashboard txs={txs} onClear={handleClear} />}
 
         <footer className="mt-20 pt-6 border-t hairline border-rule flex flex-wrap items-center justify-between gap-3 font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
-          <span>Atelier Audita · Parecer Privado</span>
+          <span>Auditor · Parecer Privado</span>
           <span>Processado no navegador · sem servidor</span>
         </footer>
       </div>
