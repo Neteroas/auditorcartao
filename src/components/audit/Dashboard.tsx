@@ -278,13 +278,22 @@ function Panorama({ months, categories, txs }: {
               return b[1] - a[1];
             });
 
+            // Derive month name safely from m.month (YYYY-MM), not from m.label which can be "Invalid Date"
+            const MONTH_ABBR = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+            const [mYear, mMo] = m.month.split("-");
+            const monthName = MONTH_ABBR[parseInt(mMo) - 1] || m.month;
+            const yearShort = mYear.slice(2);
+
             return (
               <div key={m.month} className={`min-w-[300px] w-[340px] rounded-2xl border ${theme.border} ${theme.bg} shadow-sm flex-shrink-0 snap-start flex flex-col`}>
                 <div className="p-6 border-b border-black/5">
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className={`font-display text-2xl font-800 uppercase tracking-wide ${theme.title}`}>
-                      {m.label.split(" ")[0]}
-                    </h3>
+                    <div>
+                      <h3 className={`font-display text-2xl font-800 uppercase tracking-wide ${theme.title}`}>
+                        {monthName}
+                      </h3>
+                      <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest mt-0.5">{yearShort}</p>
+                    </div>
                     {isMax ? (
                       <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border border-amber-200">
                         <AlertTriangle className="size-2.5" /> Maior Fatura
@@ -313,9 +322,22 @@ function Panorama({ months, categories, txs }: {
                   })}
                 </div>
                 
-                <div className="p-6 border-t border-black/5 flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Total Compras</span>
-                  <span className={`font-display text-sm font-700 ${theme.hl}`}>{fmtBRL(compras)}</span>
+                {/* Footer: Compras + Tarifas breakdown — Print 4 request */}
+                <div className="px-6 pt-4 pb-5 border-t border-black/5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Compras</span>
+                    <span className={`font-display text-sm font-700 ${theme.hl}`}>{fmtBRL(compras)}</span>
+                  </div>
+                  {juros > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-destructive/70 uppercase tracking-wider">Tarifas / Encargos</span>
+                      <span className="font-display text-sm font-700 text-destructive">{fmtBRL(juros)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-black/8 mt-0.5">
+                    <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">Total Fatura</span>
+                    <span className={`font-display text-sm font-800 ${theme.title}`}>{fmtBRL(m.total)}</span>
+                  </div>
                 </div>
               </div>
             );
@@ -769,24 +791,38 @@ function RevisarView({
 }) {
   const filtered = useMemo(() => {
     if (!activeMonth) return [];
-    return txs.filter((t) => {
-      const ym = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : t.date.slice(0, 7);
-      return ym === activeMonth;
-    });
+    return txs
+      .filter((t) => {
+        const rawM = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : null;
+        const isValid = rawM ? /^\d{4}-(0[1-9]|1[0-2])$/.test(rawM) : false;
+        const ym = isValid ? rawM! : t.date.slice(0, 7);
+        return ym === activeMonth;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [txs, activeMonth]);
 
-  const total = useMemo(() => {
+  const totalFatura = useMemo(() => {
     return filtered.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   }, [filtered]);
 
+  const totalJurosFat = useMemo(() => {
+    return filtered.filter((t) => t.amount > 0 && t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
+  }, [filtered]);
+
+  const totalComprasFat = totalFatura - totalJurosFat;
+
+  const [catFilter, setCatFilter] = useState("Todas");
+
+  const FULL_MONTHS = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
   const formatMonthName = (ym: string) => {
-    if (!ym) return "";
-    const [y, m] = ym.split("-");
-    const months = [
-      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-    ];
-    return `${months[parseInt(m) - 1]} ${y}`;
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "";
+    const [y, mo] = ym.split("-");
+    const idx = parseInt(mo) - 1;
+    return `${FULL_MONTHS[idx] ?? mo} ${y}`;
   };
 
   const categories = [
@@ -822,16 +858,56 @@ function RevisarView({
 
       {activeMonth ? (
         <>
-          {/* Summary Banner */}
-          <div className="grid grid-cols-2 gap-4 p-5 border-b border-border/30 bg-muted/5">
+          {/* Summary Banner — Print 4: Compras + Tarifas + Total */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b border-border/30 bg-muted/5">
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total da Fatura</p>
-              <p className="font-display text-2xl font-800 text-primary tabular-nums">{fmtBRL(total)}</p>
+              <p className="font-display text-2xl font-800 text-primary tabular-nums">{fmtBRL(totalFatura)}</p>
+            </div>
+            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Compras</p>
+              <p className="font-display text-2xl font-800 text-foreground tabular-nums">{fmtBRL(totalComprasFat)}</p>
+            </div>
+            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-destructive/70 uppercase tracking-widest mb-1">Tarifas / Encargos</p>
+              <p className="font-display text-2xl font-800 text-destructive tabular-nums">{fmtBRL(totalJurosFat)}</p>
             </div>
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Lançamentos</p>
               <p className="font-display text-2xl font-800 text-foreground/80">{filtered.length}</p>
             </div>
+          </div>
+
+          {/* Category filter + sum — Print 3 request */}
+          <div className="px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/10 border-b border-border/20">
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Filtrar Categoria:</label>
+              <select
+                value={catFilter}
+                onChange={(e) => setCatFilter(e.target.value)}
+                className="text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm"
+              >
+                <option value="Todas">Todas as categorias</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            {catFilter !== "Todas" && (() => {
+              const catTotal = filtered
+                .filter((t) => t.amount > 0 && t.category === catFilter)
+                .reduce((s, t) => s + t.amount, 0);
+              const catCount = filtered.filter((t) => t.amount > 0 && t.category === catFilter).length;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{catCount} lançamentos ·</span>
+                  <span className="font-display text-base font-800 text-primary tabular-nums">{fmtBRL(catTotal)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({totalFatura > 0 ? ((catTotal / totalFatura) * 100).toFixed(1) : 0}% da fatura)
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="overflow-x-auto">
@@ -845,8 +921,12 @@ function RevisarView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
-                {filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-primary/[0.02] transition-colors duration-100">
+                {filtered
+                  .filter((t) => catFilter === "Todas" || t.category === catFilter)
+                  .map((t) => (
+                  <tr key={t.id} className={`hover:bg-primary/[0.02] transition-colors duration-100 ${
+                    t.category === "Tarifas" ? "bg-destructive/[0.02]" : ""
+                  }`}>
                     <td className="px-6 py-3.5 tabular text-muted-foreground text-xs font-medium">
                       {t.date.split("-").reverse().join("/")}
                     </td>
@@ -873,16 +953,18 @@ function RevisarView({
                         ))}
                       </select>
                     </td>
-                    <td className="px-6 py-3.5 text-right tabular font-700 text-foreground">
+                    <td className={`px-6 py-3.5 text-right tabular font-700 ${
+                      t.category === "Tarifas" ? "text-destructive" : "text-foreground"
+                    }`}>
                       {fmtBRL(t.amount)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && (
+            {filtered.filter((t) => catFilter === "Todas" || t.category === catFilter).length === 0 && (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                Nenhum lançamento encontrado nesta fatura.
+                Nenhum lançamento encontrado{catFilter !== "Todas" ? ` em "${catFilter}"` : " nesta fatura"}.
               </div>
             )}
           </div>

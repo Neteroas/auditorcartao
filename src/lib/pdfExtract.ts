@@ -98,58 +98,60 @@ function extractDateFromFilename(filename: string): string | null {
 
 function extractDueDateFromText(text: string, fallbackYear: number): string | null {
   const clean = text.replace(/\s+/g, " ");
-  
-  // 1. Regular expression for Vencimento/Venc followed by date
-  const regex1 = /(?:vencimento|venc|pagamento\s+em|pagar\s+at[eé]|venc\s+em|vence\s+em|vto)[:\s-]*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i;
-  let match = clean.match(regex1);
-  if (match) {
-    const d = match[1].padStart(2, "0");
-    const m = match[2].padStart(2, "0");
-    let y = parseInt(match[3]);
-    if (y < 100) y += 2000;
-    return `${y}-${m}-${d}`;
+
+  // Helper: validate month is in range, returns "YYYY-MM-DD" or null
+  const makeDate = (dayStr: string | null, monthStr: string, yearInt: number): string | null => {
+    const mo = parseInt(monthStr, 10);
+    const y = yearInt < 100 ? yearInt + 2000 : yearInt;
+    if (mo < 1 || mo > 12 || y < 2000 || y > 2100) return null;
+    const d = dayStr ? parseInt(dayStr, 10) : 1;
+    if (d < 1 || d > 31) return null;
+    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  };
+
+  // 1. Vencimento DD/MM/YYYY — strict: day must be ≤31, month must be ≤12, year ≥2000
+  const r1 = /(?:vencimento|venc\.?|vto|pagamento\s+em|pagar\s+at[eé]|vence\s+em)[:\s-]*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i;
+  const m1 = clean.match(r1);
+  if (m1) {
+    const res = makeDate(m1[1], m1[2], parseInt(m1[3]));
+    if (res) return res;
   }
 
-  // 2. Format: Vencimento DD de [Mês] de YYYY
-  const regex2 = /(?:vencimento|venc|pagamento\s+em|pagar\s+at[eé]|vence\s+em)[:\s-]*(\d{1,2})\s+de\s+([a-z]{3,10})\s+de\s+(\d{4})/i;
-  match = clean.match(regex2);
-  if (match) {
-    const d = match[1].padStart(2, "0");
-    const monthWord = match[2].toLowerCase().substring(0, 3);
-    const m = MONTHS[monthWord];
-    if (m) {
-      const y = parseInt(match[3]);
-      return `${y}-${m}-${d}`;
+  // 2. Vencimento MM/YYYY (no day — common in bank statements)
+  const r2 = /(?:vencimento|venc\.?|vto|vence\s+em)[:\s-]*(\d{1,2})[\/\-](20\d{2})/i;
+  const m2 = clean.match(r2);
+  if (m2) {
+    const res = makeDate(null, m2[1], parseInt(m2[2]));
+    if (res) return res;
+  }
+
+  // 3. Vencimento DD de [Mês] de YYYY
+  const r3 = /(?:vencimento|venc\.?|pagar\s+at[eé]|vence\s+em)[:\s-]*(\d{1,2})\s+de\s+([a-záéíóúçã]{3,10})\s+de\s+(\d{4})/i;
+  const m3 = clean.match(r3);
+  if (m3) {
+    const monthWord = m3[2].toLowerCase().substring(0, 3);
+    const mo = MONTHS[monthWord];
+    if (mo) {
+      const res = makeDate(m3[1], mo, parseInt(m3[3]));
+      if (res) return res;
     }
   }
 
-  // 3. Just look for the word "vencimento" and look at next 80 characters for any date
+  // 4. Wider scan: 120 chars after the word "vencimento"
   const idx = clean.toLowerCase().indexOf("vencimento");
   if (idx !== -1) {
-    const sub = clean.substring(idx, idx + 80);
-    const dateRegex = /(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?/;
-    const mDate = sub.match(dateRegex);
-    if (mDate) {
-      const d = mDate[1].padStart(2, "0");
-      const m = mDate[2].padStart(2, "0");
-      let y = mDate[3] ? parseInt(mDate[3]) : fallbackYear;
-      if (y < 100) y += 2000;
-      return `${y}-${m}-${d}`;
+    const sub = clean.substring(idx, idx + 120);
+    // Try MM/YYYY first (month+year without day)
+    const mm = sub.match(/(\d{1,2})[\/\-](20\d{2})/);
+    if (mm) {
+      const res = makeDate(null, mm[1], parseInt(mm[2]));
+      if (res) return res;
     }
-  }
-
-  // 4. Look around "vencimento" in wider context
-  const vIdx = clean.toLowerCase().indexOf("vencimento");
-  if (vIdx !== -1) {
-    const sub = clean.substring(Math.max(0, vIdx - 40), Math.min(clean.length, vIdx + 120));
-    const dateRegex = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
-    const mDate = sub.match(dateRegex);
-    if (mDate) {
-      const d = mDate[1].padStart(2, "0");
-      const m = mDate[2].padStart(2, "0");
-      let y = parseInt(mDate[3]);
-      if (y < 100) y += 2000;
-      return `${y}-${m}-${d}`;
+    // Try DD/MM/YYYY
+    const dd = sub.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (dd) {
+      const res = makeDate(dd[1], dd[2], parseInt(dd[3]));
+      if (res) return res;
     }
   }
 

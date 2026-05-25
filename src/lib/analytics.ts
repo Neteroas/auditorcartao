@@ -20,9 +20,12 @@ export function aggregateByMonth(txs: RawTransaction[]): MonthAgg[] {
   const map = new Map<string, MonthAgg>();
   for (const t of txs) {
     if (t.amount < 0) continue;
-    const m = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : t.date.slice(0, 7);
+    // Validate invoiceDueDate: must be YYYY-MM format with month 01-12
+    const rawM = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : null;
+    const isValidInvoice = rawM ? /^\d{4}-(0[1-9]|1[0-2])$/.test(rawM) : false;
+    const m = isValidInvoice ? rawM! : t.date.slice(0, 7);
     if (!map.has(m)) {
-      // Set to 10th of the month to avoid timezone shifting issues
+      // Use the 10th to avoid timezone offset issues
       const d = new Date(m + "-10T00:00:00");
       map.set(m, {
         month: m,
