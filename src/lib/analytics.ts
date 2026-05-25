@@ -139,10 +139,10 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
     });
   }
 
-  // Duplicates
+  // Duplicates (Same date, same amount, similar description)
   const seen = new Map<string, RawTransaction[]>();
   for (const t of positives) {
-    const k = `${t.description.toLowerCase().slice(0, 20)}|${t.amount.toFixed(2)}`;
+    const k = `${t.date}|${t.description.toLowerCase().slice(0, 20)}|${t.amount.toFixed(2)}`;
     seen.set(k, [...(seen.get(k) || []), t]);
   }
   const dups = Array.from(seen.values()).filter((arr) => arr.length > 1);
