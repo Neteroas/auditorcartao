@@ -3,23 +3,34 @@ import { useEffect, useState } from "react";
 import { extractTransactions, type RawTransaction } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
+import { ShieldCheck, Cpu, Lock } from "lucide-react";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/")(
+  {
   component: Index,
   head: () => ({
     meta: [
-      { title: "Auditor · Auditoria de Faturas de Cartão" },
-      { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights." },
+      { title: "Auditor · Inteligência e Auditoria de Cartão de Crédito" },
+      { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights inteligentes." },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+      },
     ],
   }),
 });
 
 const STORAGE_KEY = "atelier-audit-txs-v1";
+
+/** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes,
+ *  mesmo que o mesmo PDF seja reimportado acidentalmente. */
+function txKey(t: RawTransaction): string {
+  return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
+}
 
 function Index() {
   const [txs, setTxs] = useState<RawTransaction[]>([]);
@@ -42,14 +53,38 @@ function Index() {
     setError(null);
     try {
       const all: RawTransaction[] = [];
+      const alreadyImported: string[] = [];
+
       for (const f of files) {
+        // Verificar se este arquivo já foi importado anteriormente
+        const alreadyExists = txs.some((t) => t.source === f.name);
+        if (alreadyExists) {
+          alreadyImported.push(f.name);
+          continue; // Pular este arquivo
+        }
         const extracted = await extractTransactions(f);
         all.push(...extracted);
       }
-      if (!all.length) {
+
+      if (alreadyImported.length > 0) {
+        setError(
+          `Arquivo(s) já importado(s) anteriormente e ignorado(s) para evitar duplicatas: ${alreadyImported.join(", ")}. ` +
+          `Use "Limpar análise" se quiser reimportar do zero.`
+        );
+      }
+
+      if (!all.length && alreadyImported.length === 0) {
         setError("Nenhum lançamento foi reconhecido no(s) PDF(s). O layout pode estar fora dos padrões suportados, ou o arquivo é uma imagem escaneada.");
       }
-      setTxs((prev) => [...prev, ...all]);
+
+      if (all.length > 0) {
+        setTxs((prev) => {
+          // Deduplicar pela chave composta: mesmo source+data+desc+valor nunca entra duas vezes
+          const existingKeys = new Set(prev.map(txKey));
+          const newUnique = all.filter((t) => !existingKeys.has(txKey(t)));
+          return [...prev, ...newUnique];
+        });
+      }
     } catch (e: any) {
       setError(e?.message || "Falha ao processar PDF.");
     } finally {
@@ -64,47 +99,76 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background text-foreground grain">
-      <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 md:py-16">
-        {/* Letterhead */}
-        <header className="flex flex-wrap items-end justify-between gap-6 pb-6 border-b border-primary">
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
-              Est. MMXXV · Auditoria & Inteligência Financeira
-            </p>
-            <h1 className="font-display text-5xl md:text-7xl mt-2 leading-[0.95]">
-              Auditor
-            </h1>
-            <p className="font-display italic text-lg text-muted-foreground mt-2">
-              Um parecer sênior sobre cada lançamento da sua fatura.
-            </p>
+      {/* Top navigation bar */}
+      <nav className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-xl backdrop-saturate-150">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="size-7 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
+              <ShieldCheck className="size-4 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-display font-700 text-base tracking-tight text-foreground">
+              Auditor<span className="text-primary">.</span>
+            </span>
           </div>
-          <div className="text-right">
-            <p className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">Dossier №</p>
-            <p className="font-display text-2xl tabular">
-              {String(txs.length).padStart(4, "0")} <span className="text-muted-foreground">/ lançamentos</span>
-            </p>
-            <p className="font-mono text-[10px] text-muted-foreground mt-1">
-              Processamento local · zero upload
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Lock className="size-3" />
+              Processamento local · privado
+            </div>
+            {txs.length > 0 && (
+              <span className="pill">
+                <span className="tabular font-mono">{txs.length}</span> lançamentos
+              </span>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16">
+        {/* Hero header */}
+        <header className="mb-12">
+          <div className="flex flex-wrap items-start justify-between gap-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="pill-accent pill text-[11px]">
+                  <Cpu className="size-2.5" /> 100% local · zero upload
+                </span>
+              </div>
+              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-800 leading-[1.05] tracking-tight">
+                Auditoria inteligente{" "}
+                <span className="text-primary">das suas faturas</span>
+              </h1>
+              <p className="text-lg text-muted-foreground mt-4 leading-relaxed font-normal max-w-lg">
+                Importe seus PDFs de cartão de crédito e obtenha análises detalhadas de gastos, parcelas futuras e detecção automática de cobranças duplicadas.
+              </p>
+            </div>
           </div>
         </header>
 
-        {/* Intro / methodology */}
-        <section className="mt-10">
+        {/* Upload section */}
+        <section>
           <UploadDropzone onFiles={handleFiles} busy={busy} />
           {error && (
-            <div className="mt-4 border hairline border-destructive bg-destructive/5 p-4 text-sm">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-destructive">Aviso de auditoria</p>
-              <p className="mt-1">{error}</p>
+            <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
+              <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-destructive text-[10px] font-bold">!</span>
+              </div>
+              <div>
+                <p className="font-semibold text-destructive text-xs uppercase tracking-wide mb-1">Aviso de auditoria</p>
+                <p className="text-foreground/80">{error}</p>
+              </div>
             </div>
           )}
         </section>
 
         {txs.length > 0 && <Dashboard txs={txs} onClear={handleClear} />}
 
-        <footer className="mt-20 pt-6 border-t hairline border-rule flex flex-wrap items-center justify-between gap-3 font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
-          <span>Auditor · Parecer Privado</span>
-          <span>Processado no navegador · sem servidor</span>
+        <footer className="mt-20 pt-6 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span className="font-medium">Auditor · Auditoria Privada de Cartões</span>
+          <span className="flex items-center gap-1.5">
+            <Lock className="size-3" />
+            Processado no navegador · sem servidor · sem cookies
+          </span>
         </footer>
       </div>
     </div>

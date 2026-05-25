@@ -78,51 +78,64 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
     const content = await page.getTextContent();
     const items = content.items as any[];
     // Group by y position to reconstruct lines
-    const lines: Record<string, string[]> = {};
+    const lines: Record<string, { x: number; str: string }[]> = {};
     for (const it of items) {
       const y = Math.round(it.transform[5]);
+      const x = it.transform[4];
       lines[y] = lines[y] || [];
-      lines[y].push(it.str);
+      lines[y].push({ x, str: it.str });
     }
     const sorted = Object.keys(lines).map(Number).sort((a, b) => b - a);
-    for (const y of sorted) fullText += lines[y].join(" ") + "\n";
+    for (const y of sorted) {
+      // Sort items on the same line horizontally by X coordinate to guarantee correct left-to-right reading order
+      const lineStr = lines[y]
+        .sort((a, b) => a.x - b.x)
+        .map((it) => it.str)
+        .join(" ");
+      fullText += lineStr + "\n";
+    }
   }
 
   const year = new Date().getFullYear();
   const transactions: RawTransaction[] = [];
-  const lineRe = /^\s*(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?)\s+(.+?)\s+(-?\s?(?:R\$\s?)?\d{1,3}(?:\.\d{3})*,\d{2}(?:\s?CR)?)\s*$/i;
+  // Use global matching (/gi) and increased digits capacity to support merged lines and extra columns (e.g. currency conversion columns)
+  const lineRe = /(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?)\s+(.+?)\s+(-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2}(?:\s?CR)?)\b/gi;
   const instRe = /(\d{1,2})\s?\/\s?(\d{1,2})/;
 
   for (const rawLine of fullText.split("\n")) {
     const line = rawLine.replace(/\s+/g, " ").trim();
     if (!line) continue;
-    const m = line.match(lineRe);
-    if (!m) continue;
-    const date = parseDate(m[1].trim().replace(/\s+/g, " "), year);
-    if (!date) continue;
-    const amount = parseBRLNumber(m[3]);
-    if (isNaN(amount) || amount === 0) continue;
-    const description = m[2].trim().replace(/\s{2,}/g, " ");
-    if (description.length < 2) continue;
-    if (/saldo|total|pagamento\s?efetuado|fatura\s?anterior/i.test(description)) continue;
+    
+    // Reset regex match index for each line
+    lineRe.lastIndex = 0;
+    let match;
+    while ((match = lineRe.exec(line)) !== null) {
+      const date = parseDate(match[1].trim().replace(/\s+/g, " "), year);
+      if (!date) continue;
+      const amount = parseBRLNumber(match[3]);
+      if (isNaN(amount) || amount === 0) continue;
+      const description = match[2].trim().replace(/\s{2,}/g, " ");
+      if (description.length < 2) continue;
+      if (/saldo|total|pagamento\s?efetuado|fatura\s?anterior/i.test(description)) continue;
 
-    let installment;
-    const instMatch = description.match(instRe);
-    if (instMatch) {
-      const c = parseInt(instMatch[1]);
-      const t = parseInt(instMatch[2]);
-      if (t > 1 && t <= 48 && c <= t) installment = { current: c, total: t };
+      let installment;
+      const instMatch = description.match(instRe);
+      if (instMatch) {
+        const c = parseInt(instMatch[1]);
+        const t = parseInt(instMatch[2]);
+        if (t > 1 && t <= 48 && c <= t) installment = { current: c, total: t };
+      }
+
+      transactions.push({
+        id: crypto.randomUUID(),
+        date,
+        description,
+        amount,
+        installment,
+        category: categorize(description),
+        source: file.name,
+      });
     }
-
-    transactions.push({
-      id: crypto.randomUUID(),
-      date,
-      description,
-      amount,
-      installment,
-      category: categorize(description),
-      source: file.name,
-    });
   }
 
   return transactions;

@@ -147,10 +147,18 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
   }
   const dups = Array.from(seen.values()).filter((arr) => arr.length > 1);
   if (dups.length) {
+    const details = dups
+      .map(
+        (arr) =>
+          `• “${arr[0].description}” (${fmtBRL(arr[0].amount)}) ocorrendo ${arr.length} vezes nas datas: ${arr
+            .map((t) => t.date.split("-").reverse().join("/"))
+            .join(", ")}`
+      )
+      .join("\n");
     insights.push({
       kind: "warning",
       title: `${dups.length} possíveis cobranças duplicadas`,
-      detail: `Encontramos lançamentos com mesmo valor e descrição. Revise para evitar cobrança em duplicidade.`,
+      detail: `Identificamos os seguintes lançamentos repetidos com o mesmo valor e descrição:\n${details}`,
     });
   }
 
