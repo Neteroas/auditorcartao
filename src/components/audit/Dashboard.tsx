@@ -16,12 +16,13 @@ import {
   CheckCircle2, Calendar, Trash2, BarChart2, Tag, CreditCard,
   ChevronRight, ArrowUpRight, ArrowDownRight, Smartphone,
   Utensils, ShoppingCart, Car, Stethoscope, Tv, Ticket,
-  GraduationCap, Briefcase, Zap, ShieldAlert, CarFront
+  GraduationCap, Briefcase, Zap, ShieldAlert, CarFront, ListFilter
 } from "lucide-react";
 
 interface Props {
   txs: RawTransaction[];
   onClear: () => void;
+  onUpdateCategory?: (id: string, newCategory: string) => void;
   headerActions?: React.ReactNode;
 }
 
@@ -36,10 +37,11 @@ const CHART_COLORS = [
   "oklch(0.68 0.13 120)",
 ];
 
-type Tab = "panorama" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
+type Tab = "panorama" | "revisar" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
 
-export function Dashboard({ txs, onClear, headerActions }: Props) {
+export function Dashboard({ txs, onClear, onUpdateCategory, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
 
   const positives = useMemo(() => txs.filter((t) => t.amount > 0), [txs]);
   const months    = useMemo(() => aggregateByMonth(txs), [txs]);
@@ -48,7 +50,6 @@ export function Dashboard({ txs, onClear, headerActions }: Props) {
   const insights  = useMemo(() => generateInsights(txs), [txs]);
 
   const total      = positives.reduce((s, t) => s + t.amount, 0);
-  const avg        = months.length ? total / months.length : total;
   const biggest    = [...positives].sort((a, b) => b.amount - a.amount).slice(0, 10);
   const smallest   = [...positives].sort((a, b) => a.amount - b.amount).slice(0, 10);
   const futureTotal = future.reduce((s, f) => s + f.total, 0);
@@ -65,8 +66,15 @@ export function Dashboard({ txs, onClear, headerActions }: Props) {
     return ((b - a) / a) * 100;
   })();
 
+  const invoiceMonths = useMemo(() => {
+    return months.map((m) => m.month).sort((a, b) => b.localeCompare(a));
+  }, [months]);
+
+  const activeMonth = selectedMonth || invoiceMonths[0] || "";
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "panorama",   label: "Panorama",       icon: <BarChart2 className="size-3.5" /> },
+    { id: "revisar",    label: "Revisar Fatura",  icon: <ListFilter className="size-3.5" /> },
     { id: "categorias", label: "Categorias",     icon: <Tag className="size-3.5" /> },
     { id: "mensal",     label: "Mensal",         icon: <Calendar className="size-3.5" /> },
     { id: "ranking",    label: "Ranking",        icon: <TrendingUp className="size-3.5" /> },
@@ -99,20 +107,13 @@ export function Dashboard({ txs, onClear, headerActions }: Props) {
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Visão Geral · {months.length} Meses</p>
           <div className="h-px bg-border flex-1 ml-2 opacity-50" />
         </div>
-        <div className="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiTopBorder
             label="Total das faturas"
             value={fmtBRL(total)}
             sub={`${months.map(m => m.label.split(" ")[0]).join(" + ")}`}
             color="oklch(0.47 0.21 270)"
             valueColor="text-[#1e40af]"
-          />
-          <KpiTopBorder
-            label="Média mensal"
-            value={fmtBRL(avg)}
-            sub="Por fatura fechada"
-            color="oklch(0.72 0.14 65)"
-            valueColor="text-[#d97706]"
           />
           <KpiTopBorder
             label="Total juros/encargos"
@@ -167,6 +168,15 @@ export function Dashboard({ txs, onClear, headerActions }: Props) {
       {/* Tab content */}
       <div>
         {tab === "panorama"   && <Panorama months={months} categories={categories} txs={positives} />}
+        {tab === "revisar"    && (
+          <RevisarView 
+            txs={txs} 
+            onUpdateCategory={onUpdateCategory} 
+            invoiceMonths={invoiceMonths} 
+            activeMonth={activeMonth} 
+            setActiveMonth={setSelectedMonth} 
+          />
+        )}
         {tab === "categorias" && <CategoriesView categories={categories} total={total} />}
         {tab === "mensal"     && <MonthlyView months={months} />}
         {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} />}
@@ -182,7 +192,7 @@ export function Dashboard({ txs, onClear, headerActions }: Props) {
 function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
   return (
     <div 
-      className="glass-card min-w-[240px] flex-shrink-0 snap-start overflow-hidden flex flex-col justify-between"
+      className="glass-card overflow-hidden flex flex-col justify-between"
       style={{ borderTop: `4px solid ${color}` }}
     >
       <div className="p-5">
@@ -739,6 +749,149 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
       <div className="px-6 py-3 border-t border-border/30 bg-muted/20 text-[11px] text-muted-foreground font-medium">
         {filtered.length} de {txs.length} lançamentos
       </div>
+    </div>
+  );
+}
+
+/* ── Revisar Fatura ── */
+function RevisarView({
+  txs,
+  onUpdateCategory,
+  invoiceMonths,
+  activeMonth,
+  setActiveMonth
+}: {
+  txs: RawTransaction[];
+  onUpdateCategory?: (id: string, newCategory: string) => void;
+  invoiceMonths: string[];
+  activeMonth: string;
+  setActiveMonth: (m: string) => void;
+}) {
+  const filtered = useMemo(() => {
+    if (!activeMonth) return [];
+    return txs.filter((t) => {
+      const ym = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : t.date.slice(0, 7);
+      return ym === activeMonth;
+    });
+  }, [txs, activeMonth]);
+
+  const total = useMemo(() => {
+    return filtered.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  }, [filtered]);
+
+  const formatMonthName = (ym: string) => {
+    if (!ym) return "";
+    const [y, m] = ym.split("-");
+    const months = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    return `${months[parseInt(m) - 1]} ${y}`;
+  };
+
+  const categories = [
+    "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
+    "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas", "Outros"
+  ];
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-b border-border/40 bg-muted/20">
+        <div>
+          <SectionTitle eyebrow="Filtro de Fatura" title="Revisão de Lançamentos" />
+          <p className="text-xs text-muted-foreground mt-1">
+            Selecione o mês do vencimento e edite as categorias dos lançamentos abaixo.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Vencimento:</label>
+          <select
+            value={activeMonth}
+            onChange={(e) => setActiveMonth(e.target.value)}
+            className="w-full sm:w-48 text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm"
+          >
+            {invoiceMonths.map((ym) => (
+              <option key={ym} value={ym}>
+                {formatMonthName(ym)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {activeMonth ? (
+        <>
+          {/* Summary Banner */}
+          <div className="grid grid-cols-2 gap-4 p-5 border-b border-border/30 bg-muted/5">
+            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total da Fatura</p>
+              <p className="font-display text-2xl font-800 text-primary tabular-nums">{fmtBRL(total)}</p>
+            </div>
+            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Lançamentos</p>
+              <p className="font-display text-2xl font-800 text-foreground/80">{filtered.length}</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/30">
+                  <th className="text-left px-6 py-3.5 w-[120px]">Data Compra</th>
+                  <th className="text-left px-6 py-3.5">Descrição</th>
+                  <th className="text-left px-6 py-3.5 w-[200px]">Categoria</th>
+                  <th className="text-right px-6 py-3.5 w-[140px]">Valor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {filtered.map((t) => (
+                  <tr key={t.id} className="hover:bg-primary/[0.02] transition-colors duration-100">
+                    <td className="px-6 py-3.5 tabular text-muted-foreground text-xs font-medium">
+                      {t.date.split("-").reverse().join("/")}
+                    </td>
+                    <td className="px-6 py-3.5 font-semibold text-foreground max-w-[320px] truncate" title={t.description}>
+                      {t.description}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <select
+                        value={t.category}
+                        onChange={(e) => onUpdateCategory?.(t.id, e.target.value)}
+                        className="w-full max-w-[185px] text-xs font-medium bg-white/60 hover:bg-white border border-border/50 hover:border-primary/40 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 10px center',
+                          backgroundSize: '10px',
+                          paddingRight: '28px'
+                        }}
+                      >
+                        {categories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-6 py-3.5 text-right tabular font-700 text-foreground">
+                      {fmtBRL(t.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Nenhum lançamento encontrado nesta fatura.
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-16 text-muted-foreground text-sm">
+          Nenhuma fatura disponível para revisão.
+        </div>
+      )}
     </div>
   );
 }

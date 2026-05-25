@@ -20,9 +20,10 @@ export function aggregateByMonth(txs: RawTransaction[]): MonthAgg[] {
   const map = new Map<string, MonthAgg>();
   for (const t of txs) {
     if (t.amount < 0) continue;
-    const m = t.date.slice(0, 7);
+    const m = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : t.date.slice(0, 7);
     if (!map.has(m)) {
-      const d = new Date(t.date + "T00:00:00");
+      // Set to 10th of the month to avoid timezone shifting issues
+      const d = new Date(m + "-10T00:00:00");
       map.set(m, {
         month: m,
         label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),

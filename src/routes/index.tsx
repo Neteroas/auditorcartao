@@ -97,6 +97,12 @@ function Index() {
     localStorage.removeItem(STORAGE_KEY);
   }
 
+  function handleUpdateCategory(id: string, newCategory: string) {
+    setTxs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground grain">
       {/* Top navigation bar */}
@@ -179,6 +185,7 @@ function Index() {
             <Dashboard 
               txs={txs} 
               onClear={handleClear} 
+              onUpdateCategory={handleUpdateCategory}
               headerActions={<UploadDropzone onFiles={handleFiles} busy={busy} compact />} 
             />
           </section>
