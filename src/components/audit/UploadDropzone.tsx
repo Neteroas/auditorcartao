@@ -72,7 +72,7 @@ export function UploadDropzone({ onFiles, busy }: Props) {
                 Análise de Faturas PDF
               </h3>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                Nubank, Itaú, Bradesco, XP, C6 e outros.
+                {"\u200B"}
               </p>
             </div>
             <div className="mt-8 space-y-3">
