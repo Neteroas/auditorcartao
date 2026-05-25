@@ -197,6 +197,9 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
   // Extract due date from page 1 or filename
   let invoiceDueDate = extractDueDateFromText(page1Text, year) || extractDateFromFilename(file.name) || undefined;
 
+  // Use the invoice due date year as fallback for transaction dates
+  const fallbackYear = invoiceDueDate ? parseInt(invoiceDueDate.substring(0, 4), 10) : year;
+
   const transactions: RawTransaction[] = [];
   // Use global matching (/gi) and increased digits capacity to support merged lines and extra columns
   const lineRe = /(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?)\s+(.+?)\s+(-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2}(?:\s?CR)?)\b/gi;
@@ -210,8 +213,15 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
     lineRe.lastIndex = 0;
     let match;
     while ((match = lineRe.exec(line)) !== null) {
-      const date = parseDate(match[1].trim().replace(/\s+/g, " "), year);
+      let date = parseDate(match[1].trim().replace(/\s+/g, " "), fallbackYear);
       if (!date) continue;
+
+      // Adjust year if the date is after the invoice due date (boundary crossing, e.g. Oct 2025 purchase in May 2026 invoice)
+      if (invoiceDueDate && date > invoiceDueDate) {
+        const parts = date.split("-");
+        const adjustedYear = parseInt(parts[0], 10) - 1;
+        date = `${adjustedYear}-${parts[1]}-${parts[2]}`;
+      }
       const amount = parseBRLNumber(match[3]);
       if (isNaN(amount) || amount === 0) continue;
       const description = match[2].trim().replace(/\s{2,}/g, " ");
