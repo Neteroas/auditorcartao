@@ -30,7 +30,8 @@ const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
   "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
-  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas", "Outros"
+  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas",
+  "Pagamentos/Créditos", "Outros"
 ];
 
 /** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
@@ -52,7 +53,19 @@ function Index() {
     } catch {}
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
-      if (rawCats) setCategoriesList(JSON.parse(rawCats));
+      if (rawCats) {
+        const loaded = JSON.parse(rawCats);
+        if (!loaded.includes("Pagamentos/Créditos")) {
+          // Insert it before "Outros" if "Outros" is present, else push
+          const idx = loaded.indexOf("Outros");
+          if (idx !== -1) {
+            loaded.splice(idx, 0, "Pagamentos/Créditos");
+          } else {
+            loaded.push("Pagamentos/Créditos");
+          }
+        }
+        setCategoriesList(loaded);
+      }
     } catch {}
     try {
       const rawSums = localStorage.getItem(SUMMARIES_KEY);

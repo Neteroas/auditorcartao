@@ -42,9 +42,12 @@ const CATEGORIES: { name: string; keywords: RegExp }[] = [
   { name: "Educação", keywords: /udemy|coursera|alura|hotmart|curso|escola|faculdade|colegio/i },
   { name: "Serviços", keywords: /tim|vivo|claro|oi\s|net|sky|enel|cemig|sabesp|copasa|cpfl|seguro|condominio|aluguel/i },
   { name: "Tarifas", keywords: /anuidade|tarifa|iof|juros|encargo|multa|seguro\s?cart/i },
+  { name: "Pagamentos/Créditos", keywords: /pagamento|cr[eé]dito|estorno|reembolso|cashback|devolu/i },
 ];
 
-export function categorize(desc: string): string {
+export function categorize(desc: string, amount?: number): string {
+  // Negative amounts are always payments/credits
+  if (amount !== undefined && amount < 0) return "Pagamentos/Créditos";
   for (const c of CATEGORIES) if (c.keywords.test(desc)) return c.name;
   return "Outros";
 }
@@ -282,7 +285,9 @@ export async function extractData(file: File): Promise<ExtractedData> {
       if (isNaN(amount) || amount === 0) continue;
       const description = match[2].trim().replace(/\s{2,}/g, " ");
       if (description.length < 2) continue;
-      if (/saldo|total|pagamento\s?efetuado|fatura\s?anterior/i.test(description)) continue;
+      // Skip lines that are clearly summary/total headers (no real transaction content)
+      // Allow pagamento, crédito, saldo anterior — they are real entries with negative amounts
+      if (/^(total\s+(da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(total|disponível|utilizado))$/i.test(description)) continue;
 
       let installment;
       const instMatch = description.match(instRe);
@@ -298,7 +303,7 @@ export async function extractData(file: File): Promise<ExtractedData> {
         description,
         amount,
         installment,
-        category: categorize(description),
+        category: categorize(description, amount),
         source: file.name,
         invoiceDueDate,
       });

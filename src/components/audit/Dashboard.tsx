@@ -238,6 +238,7 @@ const getCatIcon = (cat: string) => {
     case "Serviços": return <Zap className="size-3.5" />;
     case "Vestuário": return <Briefcase className="size-3.5" />;
     case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
+    case "Pagamentos/Créditos": return <CheckCircle2 className="size-3.5 text-emerald-600" />;
     default: return <CreditCard className="size-3.5" />;
   }
 };
@@ -960,14 +961,21 @@ function RevisarView({
   }, [txs, activeSource]);
 
   const totalFatura = useMemo(() => {
-    return filtered.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    return filtered.reduce((s, t) => s + t.amount, 0);
   }, [filtered]);
 
   const totalJurosFat = useMemo(() => {
     return filtered.filter((t) => t.amount > 0 && t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
   }, [filtered]);
 
-  const totalComprasFat = totalFatura - totalJurosFat;
+  const totalCreditosFat = useMemo(() => {
+    return filtered.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  }, [filtered]);
+
+  const totalComprasFat = useMemo(() => {
+    return filtered.filter((t) => t.amount > 0 && t.category !== "Tarifas").reduce((s, t) => s + t.amount, 0);
+  }, [filtered]);
+
   const activeSummary = summaries[activeSource];
 
   // Get invoice due date for display
@@ -980,7 +988,13 @@ function RevisarView({
 
   const invoiceCategories = useMemo(() => {
     const cats = new Set(filtered.map((t) => t.category));
-    return categoriesList.filter((c) => cats.has(c));
+    const list = categoriesList.filter((c) => cats.has(c));
+    for (const c of cats) {
+      if (!list.includes(c)) {
+        list.push(c);
+      }
+    }
+    return list;
   }, [filtered, categoriesList]);
 
   return (
@@ -1024,7 +1038,7 @@ function RevisarView({
       {activeSource ? (
         <>
           {/* Summary Banner */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b border-border/30 bg-muted/5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-5 border-b border-border/30 bg-muted/5">
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total da Fatura</p>
               <p className="font-display text-2xl font-800 text-primary tabular-nums">{fmtBRL(totalFatura)}</p>
@@ -1034,10 +1048,14 @@ function RevisarView({
               <p className="font-display text-2xl font-800 text-foreground tabular-nums">{fmtBRL(totalComprasFat)}</p>
             </div>
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-widest mb-1">Créditos / Pagos</p>
+              <p className="font-display text-2xl font-800 text-emerald-600 tabular-nums">{fmtBRL(totalCreditosFat)}</p>
+            </div>
+            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-destructive/70 uppercase tracking-widest mb-1">Tarifas / Encargos</p>
               <p className="font-display text-2xl font-800 text-destructive tabular-nums">{fmtBRL(totalJurosFat)}</p>
             </div>
-            <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
+            <div className="col-span-2 md:col-span-1 bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Lançamentos</p>
               <p className="font-display text-2xl font-800 text-foreground/80">{filtered.length}</p>
               {invoiceDueDate && (
