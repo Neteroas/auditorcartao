@@ -127,7 +127,7 @@ export function UploadDropzone({ onFiles, busy }: Props) {
             </button>
 
             <p className="text-[10px] text-muted-foreground/70 mt-4">
-              Suporta PDF · Nubank, Itaú, Bradesco, XP, C6 e outros
+              {"\u200B"}
             </p>
           </div>
         </div>
