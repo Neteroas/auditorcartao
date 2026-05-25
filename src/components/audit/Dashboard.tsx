@@ -14,7 +14,9 @@ import {
 import {
   TrendingUp, TrendingDown, AlertTriangle, Sparkles,
   CheckCircle2, Calendar, Trash2, BarChart2, Tag, CreditCard,
-  ChevronRight, ArrowUpRight, ArrowDownRight,
+  ChevronRight, ArrowUpRight, ArrowDownRight, Smartphone,
+  Utensils, ShoppingCart, Car, Stethoscope, Tv, Ticket,
+  GraduationCap, Briefcase, Zap, ShieldAlert, CarFront
 } from "lucide-react";
 
 interface Props {
@@ -22,16 +24,15 @@ interface Props {
   onClear: () => void;
 }
 
-/* ── Harmonious light-mode chart palette ── */
 const CHART_COLORS = [
-  "oklch(0.47 0.21 270)",   /* Royal Indigo */
-  "oklch(0.54 0.18 295)",   /* Violet */
-  "oklch(0.62 0.15 200)",   /* Ciano Soft */
-  "oklch(0.76 0.13 72)",    /* Âmbar */
-  "oklch(0.55 0.16 155)",   /* Esmeralda */
-  "oklch(0.64 0.17 340)",   /* Rosa Soft */
-  "oklch(0.60 0.14 30)",    /* Coral */
-  "oklch(0.68 0.13 120)",   /* Lima */
+  "oklch(0.47 0.21 270)",
+  "oklch(0.54 0.18 295)",
+  "oklch(0.62 0.15 200)",
+  "oklch(0.76 0.13 72)",
+  "oklch(0.55 0.16 155)",
+  "oklch(0.64 0.17 340)",
+  "oklch(0.60 0.14 30)",
+  "oklch(0.68 0.13 120)",
 ];
 
 type Tab = "panorama" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
@@ -46,10 +47,15 @@ export function Dashboard({ txs, onClear }: Props) {
   const insights  = useMemo(() => generateInsights(txs), [txs]);
 
   const total      = positives.reduce((s, t) => s + t.amount, 0);
-  const avg        = positives.length ? total / positives.length : 0;
+  const avg        = months.length ? total / months.length : total;
   const biggest    = [...positives].sort((a, b) => b.amount - a.amount).slice(0, 10);
   const smallest   = [...positives].sort((a, b) => a.amount - b.amount).slice(0, 10);
   const futureTotal = future.reduce((s, f) => s + f.total, 0);
+
+  // Visão Geral metrics
+  const totalJuros = positives.filter(t => t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
+  const totalAlim  = positives.filter(t => t.category === "Alimentação" || t.category === "Mercado").reduce((s, t) => s + t.amount, 0);
+  const totalTrans = positives.filter(t => t.category === "Transporte").reduce((s, t) => s + t.amount, 0);
 
   const monthDelta = (() => {
     if (months.length < 2) return null;
@@ -70,7 +76,6 @@ export function Dashboard({ txs, onClear }: Props) {
 
   return (
     <div className="mt-10">
-      {/* Section header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">Relatório Consolidado</p>
@@ -84,38 +89,57 @@ export function Dashboard({ txs, onClear }: Props) {
         </button>
       </div>
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Kpi
-          label="Total auditado"
-          value={fmtBRL(total)}
-          sub={`${positives.length} lançamentos`}
-          accent="primary"
-          icon={<CreditCard className="size-4" />}
-        />
-        <Kpi
-          label="Ticket médio"
-          value={fmtBRL(avg)}
-          sub="por transação"
-          accent="neutral"
-          icon={<BarChart2 className="size-4" />}
-        />
-        <Kpi
-          label="Variação mensal"
-          value={monthDelta == null ? "—" : `${monthDelta > 0 ? "+" : ""}${monthDelta.toFixed(1)}%`}
-          sub={monthDelta == null ? "necessita 2+ meses" : monthDelta > 0 ? "vs. mês anterior" : "vs. mês anterior"}
-          accent={monthDelta != null && monthDelta > 0 ? "warning" : "positive"}
-          icon={monthDelta != null && monthDelta > 0
-            ? <ArrowUpRight className="size-4" />
-            : <ArrowDownRight className="size-4" />}
-        />
-        <Kpi
-          label="Compromisso futuro"
-          value={fmtBRL(futureTotal)}
-          sub={`${future.length} meses projetados`}
-          accent="accent"
-          icon={<Calendar className="size-4" />}
-        />
+      {/* ── VISÃO GERAL (KPIs em Cards com Borda Superior) ── */}
+      <div className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Visão Geral · {months.length} Meses</p>
+          <div className="h-px bg-border flex-1 ml-2 opacity-50" />
+        </div>
+        <div className="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x">
+          <KpiTopBorder
+            label="Total das faturas"
+            value={fmtBRL(total)}
+            sub={`${months.map(m => m.label.split(" ")[0]).join(" + ")}`}
+            color="oklch(0.47 0.21 270)"
+            valueColor="text-[#1e40af]"
+          />
+          <KpiTopBorder
+            label="Média mensal"
+            value={fmtBRL(avg)}
+            sub="Por fatura fechada"
+            color="oklch(0.72 0.14 65)"
+            valueColor="text-[#d97706]"
+          />
+          <KpiTopBorder
+            label="Total juros/encargos"
+            value={fmtBRL(totalJuros)}
+            sub={totalJuros > 0 ? "Atenção a taxas e multas" : "Nenhum juro cobrado"}
+            color="oklch(0.60 0.20 25)"
+            valueColor="text-[#dc2626]"
+            alert={totalJuros > 0}
+          />
+          <KpiTopBorder
+            label="Total alimentação"
+            value={fmtBRL(totalAlim)}
+            sub="Rest. + Mercado"
+            color="oklch(0.55 0.16 155)"
+            valueColor="text-[#0f766e]"
+          />
+          <KpiTopBorder
+            label="Total transporte"
+            value={fmtBRL(totalTrans)}
+            sub="Uber, Gasolina, etc."
+            color="oklch(0.35 0.05 250)"
+            valueColor="text-[#334155]"
+          />
+          <KpiTopBorder
+            label="Parcelas futuras"
+            value={fmtBRL(futureTotal)}
+            sub="Saldo restante em aberto"
+            color="oklch(0.76 0.13 72)"
+            valueColor="text-[#d97706]"
+          />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -138,7 +162,7 @@ export function Dashboard({ txs, onClear }: Props) {
 
       {/* Tab content */}
       <div>
-        {tab === "panorama"   && <Panorama months={months} categories={categories} />}
+        {tab === "panorama"   && <Panorama months={months} categories={categories} txs={positives} />}
         {tab === "categorias" && <CategoriesView categories={categories} total={total} />}
         {tab === "mensal"     && <MonthlyView months={months} />}
         {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} />}
@@ -150,40 +174,231 @@ export function Dashboard({ txs, onClear }: Props) {
   );
 }
 
-/* ── KPI Card ── */
-type KpiAccent = "primary" | "neutral" | "warning" | "positive" | "accent";
+/* ── KPI Card com borda superior colorida ── */
+function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
+  return (
+    <div 
+      className="glass-card min-w-[240px] flex-shrink-0 snap-start overflow-hidden flex flex-col justify-between"
+      style={{ borderTop: `4px solid ${color}` }}
+    >
+      <div className="p-5">
+        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.15em] mb-3">{label}</p>
+        <p className={`font-display text-2xl font-800 tabular tracking-tighter ${valueColor}`}>{value}</p>
+      </div>
+      <div className="px-5 py-3 bg-muted/20 border-t border-border/30 flex items-center justify-between">
+        <p className="text-[10px] text-muted-foreground font-medium">{sub}</p>
+        {alert && <AlertTriangle className="size-3 text-destructive" />}
+      </div>
+    </div>
+  );
+}
 
-function Kpi({ label, value, sub, accent = "neutral", icon }: {
-  label: string; value: string; sub: string; accent?: KpiAccent; icon?: React.ReactNode;
+/* ── Panorama ── */
+function Panorama({ months, categories, txs }: {
+  months: MonthAgg[]; categories: ReturnType<typeof aggregateByCategory>; txs: RawTransaction[];
 }) {
-  const accentStyles: Record<KpiAccent, string> = {
-    primary:  "text-primary",
-    neutral:  "text-foreground",
-    warning:  "text-warning",
-    positive: "text-positive",
-    accent:   "text-accent",
-  };
-  const iconBg: Record<KpiAccent, string> = {
-    primary:  "bg-primary/10 text-primary border-primary/15",
-    neutral:  "bg-muted/60 text-muted-foreground border-border/60",
-    warning:  "bg-warning/10 text-warning border-warning/20",
-    positive: "bg-positive/10 text-positive border-positive/20",
-    accent:   "bg-accent/10 text-accent border-accent/15",
+  const maxMonth = Math.max(...months.map((m) => m.total));
+
+  // Preparar os dados de assinaturas
+  const subs = txs.filter((t) => t.category === "Assinaturas");
+  const subMap = new Map<string, { desc: string, amount: number, occurrences: number }>();
+  
+  // Agrupar assinaturas por "raiz" de nome para ver recorrência
+  subs.forEach(t => {
+    // Normalizar nomes como "Netflix.Com", "SpotifyBR"
+    const name = t.description.toLowerCase()
+      .replace(/\.com|br|\*|\s/g, "")
+      .slice(0, 12); 
+    const prev = subMap.get(name) || { desc: t.description.split("*").pop() || t.description, amount: 0, occurrences: 0 };
+    if (t.amount > prev.amount) prev.amount = t.amount; // Pega a maior cobrança para a estimativa mensal
+    prev.occurrences++;
+    subMap.set(name, prev);
+  });
+  
+  const subList = Array.from(subMap.values()).sort((a, b) => b.amount - a.amount);
+  const totalSubs = subList.reduce((s, x) => s + x.amount, 0);
+
+  const cardThemes = [
+    { bg: "bg-sky-50/50", border: "border-sky-100", title: "text-sky-700", badge: "bg-sky-200/50 text-sky-800", hl: "text-sky-900" },
+    { bg: "bg-amber-50/50", border: "border-amber-100", title: "text-amber-700", badge: "bg-amber-200/50 text-amber-800", hl: "text-amber-900" },
+    { bg: "bg-emerald-50/50", border: "border-emerald-100", title: "text-emerald-700", badge: "bg-emerald-200/50 text-emerald-800", hl: "text-emerald-900" },
+    { bg: "bg-purple-50/50", border: "border-purple-100", title: "text-purple-700", badge: "bg-purple-200/50 text-purple-800", hl: "text-purple-900" },
+    { bg: "bg-rose-50/50", border: "border-rose-100", title: "text-rose-700", badge: "bg-rose-200/50 text-rose-800", hl: "text-rose-900" },
+  ];
+
+  const getCatIcon = (cat: string) => {
+    switch (cat) {
+      case "Alimentação": return <Utensils className="size-3.5" />;
+      case "Mercado": return <ShoppingCart className="size-3.5" />;
+      case "Transporte": return <CarFront className="size-3.5" />;
+      case "Assinaturas": return <Tv className="size-3.5" />;
+      case "Saúde": return <Stethoscope className="size-3.5" />;
+      case "Lazer": return <Ticket className="size-3.5" />;
+      case "Educação": return <GraduationCap className="size-3.5" />;
+      case "Serviços": return <Zap className="size-3.5" />;
+      case "Vestuário": return <Briefcase className="size-3.5" />;
+      case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
+      default: return <CreditCard className="size-3.5" />;
+    }
   };
 
   return (
-    <div className="glass-card p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-        {icon && (
-          <div className={`size-7 rounded-lg flex items-center justify-center border ${iconBg[accent]}`}>
-            {icon}
-          </div>
-        )}
-      </div>
+    <div className="space-y-10">
+      {/* ── 1. Detalhamento por Mês ── */}
       <div>
-        <p className={`font-mono text-xl md:text-2xl font-700 tabular leading-none ${accentStyles[accent]}`}>{value}</p>
-        <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">{sub}</p>
+        <div className="flex items-center gap-2 mb-5">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Detalhamento por Mês</p>
+          <div className="h-px bg-border flex-1 ml-2 opacity-50" />
+        </div>
+        <div className="flex overflow-x-auto gap-5 pb-4 hide-scrollbar snap-x">
+          {months.map((m, i) => {
+            const theme = cardThemes[i % cardThemes.length];
+            const isMax = m.total === maxMonth && months.length > 1;
+            const juros = m.byCategory["Tarifas"] || 0;
+            const compras = m.total - juros;
+            
+            // Ordenar categorias do mês (Tarifas sempre por último)
+            const sortedCats = Object.entries(m.byCategory).sort((a, b) => {
+              if (a[0] === "Tarifas") return 1;
+              if (b[0] === "Tarifas") return -1;
+              return b[1] - a[1];
+            });
+
+            return (
+              <div key={m.month} className={`min-w-[300px] w-[340px] rounded-2xl border ${theme.border} ${theme.bg} shadow-sm flex-shrink-0 snap-start flex flex-col`}>
+                <div className="p-6 border-b border-black/5">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className={`font-display text-2xl font-800 uppercase tracking-wide ${theme.title}`}>
+                      {m.label.split(" ")[0]}
+                    </h3>
+                    {isMax ? (
+                      <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border border-amber-200">
+                        <AlertTriangle className="size-2.5" /> Maior Fatura
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${theme.badge}`}>
+                        Fatura Fechada
+                      </span>
+                    )}
+                  </div>
+                  <p className={`font-display text-xl font-700 ${theme.title}`}>{fmtBRL(m.total)}</p>
+                </div>
+                
+                <div className="p-6 flex-1 flex flex-col gap-3">
+                  {sortedCats.slice(0, 8).map(([cat, val]) => {
+                    const isTarifa = cat === "Tarifas";
+                    return (
+                      <div key={cat} className={`flex items-center justify-between text-xs ${isTarifa ? "text-destructive font-semibold" : "text-foreground/80"}`}>
+                        <div className="flex items-center gap-2.5">
+                          <span className={isTarifa ? "text-destructive" : "text-muted-foreground"}>{getCatIcon(cat)}</span>
+                          <span>{cat}</span>
+                        </div>
+                        <span className="tabular font-mono">{fmtBRL(val)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="p-6 border-t border-black/5 flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Total Compras</span>
+                  <span className={`font-display text-sm font-700 ${theme.hl}`}>{fmtBRL(compras)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 2. Assinaturas e Recorrências ── */}
+      {subList.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Plataformas, IAs & Streamings</p>
+            <div className="h-px bg-border flex-1 ml-2 opacity-50" />
+          </div>
+          <div className="glass-card p-6 border-t-4 border-t-[#8b5cf6]">
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="md:w-64 border-b md:border-b-0 md:border-r border-border/40 pb-6 md:pb-0 md:pr-6 flex flex-col justify-center">
+                <div className="size-10 rounded-xl bg-purple-100 flex items-center justify-center mb-4 border border-purple-200">
+                  <Tv className="size-5 text-purple-600" />
+                </div>
+                <h3 className="font-display text-lg font-700">Levantamento de Assinaturas</h3>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                  Custo recorrente estimado baseado nos serviços digitais identificados na fatura.
+                </p>
+                <div className="mt-6">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Custo Mensal</p>
+                  <p className="font-display text-3xl font-800 text-purple-700">{fmtBRL(totalSubs)}</p>
+                </div>
+              </div>
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {subList.map((sub, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-border/40 bg-muted/10 hover:bg-muted/30 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate max-w-[120px]" title={sub.desc}>{sub.desc}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">{sub.occurrences} cobranças</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs font-bold font-mono">{fmtBRL(sub.amount)}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">/mês</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. Gráficos Anteriores ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 pt-4">
+        <div className="lg:col-span-2 glass-card p-6">
+          <SectionTitle eyebrow="Fig. 01" title="Evolução de gastos por mês" />
+          <div className="h-72 mt-5">
+            <ResponsiveContainer>
+              <AreaChart data={months}>
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="oklch(0.47 0.21 270)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="oklch(0.47 0.21 270)" stopOpacity={0.01} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="oklch(0.175 0.025 255 / 0.06)" strokeDasharray="3 4" vertical={false} />
+                <XAxis dataKey="label" stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 500 }} />
+                <YAxis stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTip />} />
+                <Area type="monotone" dataKey="total" stroke="oklch(0.47 0.21 270)" strokeWidth={2.5} fill="url(#areaGrad)" dot={{ fill: "oklch(0.47 0.21 270)", r: 4, strokeWidth: 2, stroke: "white" }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="glass-card p-6">
+          <SectionTitle eyebrow="Fig. 02" title="Composição por categoria" />
+          <div className="h-44 mt-4">
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={categories.slice(0, 6)} dataKey="total" nameKey="category" innerRadius={48} outerRadius={80} paddingAngle={3}>
+                  {categories.slice(0, 6).map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={0} />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-3 space-y-2">
+            {categories.slice(0, 5).map((c, i) => (
+              <div key={c.category} className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="size-2 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                  <span className="truncate font-medium text-foreground/80">{c.category}</span>
+                </span>
+                <span className="tabular text-muted-foreground ml-2 flex-shrink-0">{fmtBRL(c.total)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -210,64 +425,6 @@ function ChartTip({ active, payload, label }: any) {
           {p.name === "count" ? `${p.value} lançamentos` : fmtBRL(p.value)}
         </p>
       ))}
-    </div>
-  );
-}
-
-/* ── Panorama ── */
-function Panorama({ months, categories }: {
-  months: ReturnType<typeof aggregateByMonth>;
-  categories: ReturnType<typeof aggregateByCategory>;
-}) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      <div className="lg:col-span-2 glass-card p-6">
-        <SectionTitle eyebrow="Fig. 01" title="Evolução de gastos por mês" />
-        <div className="h-72 mt-5">
-          <ResponsiveContainer>
-            <AreaChart data={months}>
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="oklch(0.47 0.21 270)" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="oklch(0.47 0.21 270)" stopOpacity={0.01} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="oklch(0.175 0.025 255 / 0.06)" strokeDasharray="3 4" vertical={false} />
-              <XAxis dataKey="label" stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 500 }} />
-              <YAxis stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<ChartTip />} />
-              <Area type="monotone" dataKey="total" stroke="oklch(0.47 0.21 270)" strokeWidth={2.5} fill="url(#areaGrad)" dot={{ fill: "oklch(0.47 0.21 270)", r: 4, strokeWidth: 2, stroke: "white" }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="glass-card p-6">
-        <SectionTitle eyebrow="Fig. 02" title="Composição por categoria" />
-        <div className="h-44 mt-4">
-          <ResponsiveContainer>
-            <PieChart>
-              <Pie data={categories.slice(0, 6)} dataKey="total" nameKey="category" innerRadius={48} outerRadius={80} paddingAngle={3}>
-                {categories.slice(0, 6).map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={0} />
-                ))}
-              </Pie>
-              <Tooltip content={<ChartTip />} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-3 space-y-2">
-          {categories.slice(0, 5).map((c, i) => (
-            <div key={c.category} className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-2 min-w-0">
-                <span className="size-2 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                <span className="truncate font-medium text-foreground/80">{c.category}</span>
-              </span>
-              <span className="tabular text-muted-foreground ml-2 flex-shrink-0">{fmtBRL(c.total)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -525,7 +682,6 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
 
   return (
     <div className="glass-card overflow-hidden">
-      {/* Toolbar */}
       <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-b border-border/40 bg-muted/20">
         <SectionTitle eyebrow="VII" title="Livro Razão" />
         <div className="relative w-full sm:w-64">
