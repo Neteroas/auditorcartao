@@ -115,7 +115,7 @@ export function UploadDropzone({ onFiles, busy }: Props) {
               <span className="text-primary">aqui</span>
             </h2>
             <p className="text-sm text-muted-foreground mt-3 max-w-xs leading-relaxed">
-              Ou clique para selecionar os arquivos. Múltiplas faturas são suportadas ao mesmo tempo.
+              {"\u200B"}
             </p>
 
             <button
