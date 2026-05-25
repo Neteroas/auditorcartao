@@ -22,6 +22,7 @@ import {
 interface Props {
   txs: RawTransaction[];
   onClear: () => void;
+  headerActions?: React.ReactNode;
 }
 
 const CHART_COLORS = [
@@ -37,7 +38,7 @@ const CHART_COLORS = [
 
 type Tab = "panorama" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
 
-export function Dashboard({ txs, onClear }: Props) {
+export function Dashboard({ txs, onClear, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
 
   const positives = useMemo(() => txs.filter((t) => t.amount > 0), [txs]);
@@ -81,12 +82,15 @@ export function Dashboard({ txs, onClear }: Props) {
           <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">Relatório Consolidado</p>
           <h2 className="font-display text-2xl md:text-3xl font-700 tracking-tight">Parecer de Auditoria</h2>
         </div>
-        <button
-          onClick={onClear}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-destructive bg-white border border-border/60 hover:border-destructive/30 px-3 py-2 rounded-lg transition-all duration-200 shadow-sm"
-        >
-          <Trash2 className="size-3.5" /> Limpar análise
-        </button>
+        <div className="flex items-center gap-3">
+          {headerActions}
+          <button
+            onClick={onClear}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-destructive bg-white border border-border/60 hover:border-destructive/30 px-3 py-2.5 rounded-lg transition-all duration-200 shadow-sm"
+          >
+            <Trash2 className="size-3.5" /> Limpar análise
+          </button>
+        </div>
       </div>
 
       {/* ── VISÃO GERAL (KPIs em Cards com Borda Superior) ── */}

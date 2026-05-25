@@ -4,9 +4,10 @@ import { Upload, Loader2, FileText, ShieldCheck, Zap, Building2 } from "lucide-r
 interface Props {
   onFiles: (files: File[]) => Promise<void>;
   busy: boolean;
+  compact?: boolean;
 }
 
-export function UploadDropzone({ onFiles, busy }: Props) {
+export function UploadDropzone({ onFiles, busy, compact }: Props) {
   const [hover, setHover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -18,6 +19,29 @@ export function UploadDropzone({ onFiles, busy }: Props) {
     },
     [onFiles],
   );
+
+  if (compact) {
+    return (
+      <div className="inline-block">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf"
+          multiple
+          className="hidden"
+          onChange={(e) => handle(e.target.files)}
+        />
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-70"
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {busy ? "Analisando..." : "Importar PDF"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div

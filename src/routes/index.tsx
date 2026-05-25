@@ -125,43 +125,64 @@ function Index() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16">
-        {/* Hero header */}
-        <header className="mb-12">
-          <div className="flex flex-wrap items-start justify-between gap-8">
-            <div className="max-w-2xl">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="pill-accent pill text-[11px]">
-                  <Cpu className="size-2.5" /> 100% local · zero upload
-                </span>
+        {txs.length === 0 ? (
+          <>
+            {/* Hero header */}
+            <header className="mb-12">
+              <div className="flex flex-wrap items-start justify-between gap-8">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="pill-accent pill text-[11px]">
+                      <Cpu className="size-2.5" /> 100% local · zero upload
+                    </span>
+                  </div>
+                  <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-800 leading-[1.05] tracking-tight">
+                    Auditoria inteligente{" "}
+                    <span className="text-primary">das suas faturas</span>
+                  </h1>
+                  <p className="text-lg text-muted-foreground mt-4 leading-relaxed font-normal max-w-lg">
+                    Importe seus PDFs de cartão de crédito e obtenha análises detalhadas de gastos, parcelas futuras e detecção automática de cobranças duplicadas.
+                  </p>
+                </div>
               </div>
-              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-800 leading-[1.05] tracking-tight">
-                Auditoria inteligente{" "}
-                <span className="text-primary">das suas faturas</span>
-              </h1>
-              <p className="text-lg text-muted-foreground mt-4 leading-relaxed font-normal max-w-lg">
-                Importe seus PDFs de cartão de crédito e obtenha análises detalhadas de gastos, parcelas futuras e detecção automática de cobranças duplicadas.
-              </p>
-            </div>
-          </div>
-        </header>
+            </header>
 
-        {/* Upload section */}
-        <section>
-          <UploadDropzone onFiles={handleFiles} busy={busy} />
-          {error && (
-            <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
-              <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-destructive text-[10px] font-bold">!</span>
+            {/* Upload section */}
+            <section>
+              <UploadDropzone onFiles={handleFiles} busy={busy} />
+              {error && (
+                <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
+                  <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-destructive text-[10px] font-bold">!</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-destructive text-xs uppercase tracking-wide mb-1">Aviso de auditoria</p>
+                    <p className="text-foreground/80">{error}</p>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        ) : (
+          <section>
+            {error && (
+              <div className="mb-8 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
+                <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-destructive text-[10px] font-bold">!</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-destructive text-xs uppercase tracking-wide mb-1">Aviso de auditoria</p>
+                  <p className="text-foreground/80">{error}</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-destructive text-xs uppercase tracking-wide mb-1">Aviso de auditoria</p>
-                <p className="text-foreground/80">{error}</p>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {txs.length > 0 && <Dashboard txs={txs} onClear={handleClear} />}
+            )}
+            <Dashboard 
+              txs={txs} 
+              onClear={handleClear} 
+              headerActions={<UploadDropzone onFiles={handleFiles} busy={busy} compact />} 
+            />
+          </section>
+        )}
 
         <footer className="mt-20 pt-6 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <span className="font-medium">Auditor · Auditoria Privada de Cartões</span>
