@@ -4,9 +4,53 @@ export const fmtBRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export const fmtMonth = (iso: string) => {
-  const d = new Date(iso + "T00:00:00");
+  if (iso === "Outros") return "Outros";
+  const d = new Date(iso + "-10T00:00:00");
   return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
 };
+
+export function getTransactionDate(t: RawTransaction): Date {
+  if (t.date.includes("-")) {
+    return new Date(t.date + "T00:00:00");
+  }
+  // Format is DD/MM
+  const [dStr, mStr] = t.date.split("/");
+  const d = parseInt(dStr, 10);
+  const m = parseInt(mStr, 10);
+  
+  let y = new Date().getFullYear();
+  if (t.invoiceDueDate) {
+    const [invYStr, invMStr] = t.invoiceDueDate.split("-");
+    const invY = parseInt(invYStr, 10);
+    const invM = parseInt(invMStr, 10);
+    y = invY;
+    if (m > invM) {
+      y = invY - 1; // Previous year
+    }
+  }
+  return new Date(y, m - 1, d);
+}
+
+export function getSortValue(t: RawTransaction): number {
+  if (t.date.includes("-")) {
+    const [y, m, d] = t.date.split("-").map(Number);
+    return y * 10000 + m * 100 + d;
+  }
+  if (t.date.includes("/")) {
+    const [dStr, mStr] = t.date.split("/");
+    const d = parseInt(dStr, 10);
+    const m = parseInt(mStr, 10);
+    let yearOffset = 0;
+    if (t.invoiceDueDate) {
+      const invoiceMonth = parseInt(t.invoiceDueDate.split("-")[1], 10);
+      if (m > invoiceMonth) {
+        yearOffset = -1; // Previous year
+      }
+    }
+    return (yearOffset * 1200) + (m * 100) + d;
+  }
+  return 0;
+}
 
 export interface MonthAgg {
   month: string; // yyyy-mm
@@ -23,13 +67,13 @@ export function aggregateByMonth(txs: RawTransaction[]): MonthAgg[] {
     // Validate invoiceDueDate: must be YYYY-MM format with month 01-12
     const rawM = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : null;
     const isValidInvoice = rawM ? /^\d{4}-(0[1-9]|1[0-2])$/.test(rawM) : false;
-    const m = isValidInvoice ? rawM! : t.date.slice(0, 7);
+    const m = isValidInvoice ? rawM! : "Outros";
     if (!map.has(m)) {
-      // Use the 10th to avoid timezone offset issues
-      const d = new Date(m + "-10T00:00:00");
+      const yearMonth = m === "Outros" ? new Date().toISOString().slice(0, 7) : m;
+      const d = new Date(yearMonth + "-10T00:00:00");
       map.set(m, {
         month: m,
-        label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        label: m === "Outros" ? "Outros" : d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
         total: 0, count: 0, byCategory: {},
       });
     }
@@ -67,7 +111,7 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
     const { current, total } = t.installment;
     const remaining = total - current;
     if (remaining <= 0) continue;
-    const baseDate = new Date(t.date + "T00:00:00");
+    const baseDate = getTransactionDate(t);
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -117,7 +161,7 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
 
   // Weekend spend
   const weekend = positives.filter((t) => {
-    const d = new Date(t.date + "T00:00:00").getDay();
+    const d = getTransactionDate(t).getDay();
     return d === 0 || d === 6;
   });
   if (weekend.length > 3) {
@@ -155,7 +199,7 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
       .map(
         (arr) =>
           `• “${arr[0].description}” (${fmtBRL(arr[0].amount)}) ocorrendo ${arr.length} vezes nas datas: ${arr
-            .map((t) => t.date.split("-").reverse().join("/"))
+            .map((t) => t.date.includes("-") ? t.date.split("-").reverse().join("/") : t.date)
             .join(", ")}`
       )
       .join("\n");

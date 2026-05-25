@@ -48,24 +48,20 @@ function parseBRLNumber(s: string): number {
   return neg ? -Math.abs(n) : Math.abs(n);
 }
 
-function parseDate(token: string, fallbackYear: number): string | null {
+function parseDate(token: string): string | null {
   // 12/03, 12/03/2024, 12 MAR, 12 mar 24
   let m = token.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$/);
   if (m) {
     const d = m[1].padStart(2, "0");
     const mo = m[2].padStart(2, "0");
-    let y = m[3] ? parseInt(m[3]) : fallbackYear;
-    if (y < 100) y += 2000;
-    return `${y}-${mo}-${d}`;
+    return `${d}/${mo}`;
   }
   m = token.match(/^(\d{1,2})\s+([a-z]{3})(?:\s+(\d{2,4}))?$/i);
   if (m) {
     const d = m[1].padStart(2, "0");
     const mo = MONTHS[m[2].toLowerCase()];
     if (!mo) return null;
-    let y = m[3] ? parseInt(m[3]) : fallbackYear;
-    if (y < 100) y += 2000;
-    return `${y}-${mo}-${d}`;
+    return `${d}/${mo}`;
   }
   return null;
 }
@@ -197,8 +193,10 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
   // Extract due date from page 1 or filename
   let invoiceDueDate = extractDueDateFromText(page1Text, year) || extractDateFromFilename(file.name) || undefined;
 
-  // Use the invoice due date year as fallback for transaction dates
-  const fallbackYear = invoiceDueDate ? parseInt(invoiceDueDate.substring(0, 4), 10) : year;
+  if (!invoiceDueDate) {
+    const now = new Date();
+    invoiceDueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-10`;
+  }
 
   const transactions: RawTransaction[] = [];
   // Use global matching (/gi) and increased digits capacity to support merged lines and extra columns
@@ -213,15 +211,8 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
     lineRe.lastIndex = 0;
     let match;
     while ((match = lineRe.exec(line)) !== null) {
-      let date = parseDate(match[1].trim().replace(/\s+/g, " "), fallbackYear);
+      const date = parseDate(match[1].trim().replace(/\s+/g, " "));
       if (!date) continue;
-
-      // Adjust year if the date is after the invoice due date (boundary crossing, e.g. Oct 2025 purchase in May 2026 invoice)
-      if (invoiceDueDate && date > invoiceDueDate) {
-        const parts = date.split("-");
-        const adjustedYear = parseInt(parts[0], 10) - 1;
-        date = `${adjustedYear}-${parts[1]}-${parts[2]}`;
-      }
       const amount = parseBRLNumber(match[3]);
       if (isNaN(amount) || amount === 0) continue;
       const description = match[2].trim().replace(/\s{2,}/g, " ");

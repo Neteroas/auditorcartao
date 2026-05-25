@@ -6,6 +6,7 @@ import {
   fmtBRL,
   generateInsights,
   projectFutureInstallments,
+  getSortValue,
 } from "@/lib/analytics";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -66,11 +67,13 @@ export function Dashboard({ txs, onClear, onUpdateCategory, headerActions }: Pro
     return ((b - a) / a) * 100;
   })();
 
-  const invoiceMonths = useMemo(() => {
-    return months.map((m) => m.month).sort((a, b) => b.localeCompare(a));
-  }, [months]);
+  const invoiceSources = useMemo(() => {
+    const sources = new Set(txs.map((t) => t.source));
+    return Array.from(sources).sort();
+  }, [txs]);
 
-  const activeMonth = selectedMonth || invoiceMonths[0] || "";
+  const [selectedSource, setSelectedSource] = useState<string>("");
+  const activeSource = selectedSource || invoiceSources[0] || "";
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "panorama",   label: "Panorama",       icon: <BarChart2 className="size-3.5" /> },
@@ -172,9 +175,9 @@ export function Dashboard({ txs, onClear, onUpdateCategory, headerActions }: Pro
           <RevisarView 
             txs={txs} 
             onUpdateCategory={onUpdateCategory} 
-            invoiceMonths={invoiceMonths} 
-            activeMonth={activeMonth} 
-            setActiveMonth={setSelectedMonth} 
+            invoiceSources={invoiceSources} 
+            activeSource={activeSource} 
+            setActiveSource={setSelectedSource} 
           />
         )}
         {tab === "categorias" && <CategoriesView categories={categories} total={total} />}
@@ -206,6 +209,23 @@ function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
     </div>
   );
 }
+
+/* ── Categorias Icons Helper ── */
+export const getCatIcon = (cat: string) => {
+  switch (cat) {
+    case "Alimentação": return <Utensils className="size-3.5" />;
+    case "Mercado": return <ShoppingCart className="size-3.5" />;
+    case "Transporte": return <CarFront className="size-3.5" />;
+    case "Assinaturas": return <Tv className="size-3.5" />;
+    case "Saúde": return <Stethoscope className="size-3.5" />;
+    case "Lazer": return <Ticket className="size-3.5" />;
+    case "Educação": return <GraduationCap className="size-3.5" />;
+    case "Serviços": return <Zap className="size-3.5" />;
+    case "Vestuário": return <Briefcase className="size-3.5" />;
+    case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
+    default: return <CreditCard className="size-3.5" />;
+  }
+};
 
 /* ── Panorama ── */
 function Panorama({ months, categories, txs }: {
@@ -239,22 +259,6 @@ function Panorama({ months, categories, txs }: {
     { bg: "bg-purple-50/50", border: "border-purple-100", title: "text-purple-700", badge: "bg-purple-200/50 text-purple-800", hl: "text-purple-900" },
     { bg: "bg-rose-50/50", border: "border-rose-100", title: "text-rose-700", badge: "bg-rose-200/50 text-rose-800", hl: "text-rose-900" },
   ];
-
-  const getCatIcon = (cat: string) => {
-    switch (cat) {
-      case "Alimentação": return <Utensils className="size-3.5" />;
-      case "Mercado": return <ShoppingCart className="size-3.5" />;
-      case "Transporte": return <CarFront className="size-3.5" />;
-      case "Assinaturas": return <Tv className="size-3.5" />;
-      case "Saúde": return <Stethoscope className="size-3.5" />;
-      case "Lazer": return <Ticket className="size-3.5" />;
-      case "Educação": return <GraduationCap className="size-3.5" />;
-      case "Serviços": return <Zap className="size-3.5" />;
-      case "Vestuário": return <Briefcase className="size-3.5" />;
-      case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
-      default: return <CreditCard className="size-3.5" />;
-    }
-  };
 
   return (
     <div className="space-y-10">
@@ -603,7 +607,7 @@ function RankCard({ title, icon, items, eyebrow, muted }: {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{t.description}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">
-                {t.date.split("-").reverse().join("/")} · <span className="pill-accent pill text-[9px] px-1.5 py-0.5">{t.category}</span>
+                {t.date.includes("-") ? t.date.split("-").reverse().join("/") : t.date} · <span className="pill-accent pill text-[9px] px-1.5 py-0.5">{t.category}</span>
               </p>
             </div>
             <span className="tabular font-mono font-700 text-sm text-foreground flex-shrink-0">{fmtBRL(t.amount)}</span>
@@ -714,7 +718,7 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
   const [q, setQ] = useState("");
   const filtered = txs
     .filter((t) => !q || t.description.toLowerCase().includes(q.toLowerCase()) || t.category.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => getSortValue(b) - getSortValue(a));
 
   return (
     <div className="glass-card overflow-hidden">
@@ -744,7 +748,7 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
           <tbody className="divide-y divide-border/20">
             {filtered.map((t) => (
               <tr key={t.id} className="hover:bg-primary/[0.02] transition-colors duration-100 group">
-                <td className="px-6 py-3.5 tabular text-muted-foreground text-xs font-medium">{t.date.split("-").reverse().join("/")}</td>
+                <td className="px-6 py-3.5 tabular text-muted-foreground text-xs font-medium">{t.date.includes("-") ? t.date.split("-").reverse().join("/") : t.date}</td>
                 <td className="px-6 py-3.5 font-semibold text-foreground max-w-[220px] truncate">{t.description}</td>
                 <td className="px-6 py-3.5">
                   <span className="pill-accent pill text-[10px]">{t.category}</span>
@@ -779,27 +783,22 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
 function RevisarView({
   txs,
   onUpdateCategory,
-  invoiceMonths,
-  activeMonth,
-  setActiveMonth
+  invoiceSources,
+  activeSource,
+  setActiveSource
 }: {
   txs: RawTransaction[];
   onUpdateCategory?: (id: string, newCategory: string) => void;
-  invoiceMonths: string[];
-  activeMonth: string;
-  setActiveMonth: (m: string) => void;
+  invoiceSources: string[];
+  activeSource: string;
+  setActiveSource: (s: string) => void;
 }) {
   const filtered = useMemo(() => {
-    if (!activeMonth) return [];
+    if (!activeSource) return [];
     return txs
-      .filter((t) => {
-        const rawM = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : null;
-        const isValid = rawM ? /^\d{4}-(0[1-9]|1[0-2])$/.test(rawM) : false;
-        const ym = isValid ? rawM! : t.date.slice(0, 7);
-        return ym === activeMonth;
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [txs, activeMonth]);
+      .filter((t) => t.source === activeSource)
+      .sort((a, b) => getSortValue(a) - getSortValue(b));
+  }, [txs, activeSource]);
 
   const totalFatura = useMemo(() => {
     return filtered.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
@@ -811,24 +810,15 @@ function RevisarView({
 
   const totalComprasFat = totalFatura - totalJurosFat;
 
-  const [catFilter, setCatFilter] = useState("Todas");
-
-  const FULL_MONTHS = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-  ];
-
-  const formatMonthName = (ym: string) => {
-    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "";
-    const [y, mo] = ym.split("-");
-    const idx = parseInt(mo) - 1;
-    return `${FULL_MONTHS[idx] ?? mo} ${y}`;
-  };
-
   const categories = [
     "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
     "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas", "Outros"
   ];
+
+  const invoiceCategories = useMemo(() => {
+    const cats = new Set(filtered.map((t) => t.category));
+    return categories.filter((c) => cats.has(c));
+  }, [filtered]);
 
   return (
     <div className="glass-card overflow-hidden">
@@ -836,29 +826,29 @@ function RevisarView({
         <div>
           <SectionTitle eyebrow="Filtro de Fatura" title="Revisão de Lançamentos" />
           <p className="text-xs text-muted-foreground mt-1">
-            Selecione o mês do vencimento e edite as categorias dos lançamentos abaixo.
+            Selecione a fatura importada e revise as categorias de seus lançamentos.
           </p>
         </div>
         
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Vencimento:</label>
+          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Fatura/Arquivo:</label>
           <select
-            value={activeMonth}
-            onChange={(e) => setActiveMonth(e.target.value)}
-            className="w-full sm:w-48 text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm"
+            value={activeSource}
+            onChange={(e) => setActiveSource(e.target.value)}
+            className="w-full sm:w-64 text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm text-foreground/80"
           >
-            {invoiceMonths.map((ym) => (
-              <option key={ym} value={ym}>
-                {formatMonthName(ym)}
+            {invoiceSources.map((src) => (
+              <option key={src} value={src}>
+                {src.replace(/\.[^/.]+$/, "")}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      {activeMonth ? (
+      {activeSource ? (
         <>
-          {/* Summary Banner — Print 4: Compras + Tarifas + Total */}
+          {/* Summary Banner */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b border-border/30 bg-muted/5">
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total da Fatura</p>
@@ -878,95 +868,87 @@ function RevisarView({
             </div>
           </div>
 
-          {/* Category filter + sum — Print 3 request */}
-          <div className="px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/10 border-b border-border/20">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Filtrar Categoria:</label>
-              <select
-                value={catFilter}
-                onChange={(e) => setCatFilter(e.target.value)}
-                className="text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm"
-              >
-                <option value="Todas">Todas as categorias</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            {catFilter !== "Todas" && (() => {
-              const catTotal = filtered
-                .filter((t) => t.amount > 0 && t.category === catFilter)
-                .reduce((s, t) => s + t.amount, 0);
-              const catCount = filtered.filter((t) => t.amount > 0 && t.category === catFilter).length;
+          {/* Grouped by Category View */}
+          <div className="p-5 flex flex-col gap-6">
+            {invoiceCategories.map((cat) => {
+              const catTxs = filtered.filter((t) => t.category === cat);
+              const catTotal = catTxs.reduce((s, t) => s + t.amount, 0);
+              
               return (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{catCount} lançamentos ·</span>
-                  <span className="font-display text-base font-800 text-primary tabular-nums">{fmtBRL(catTotal)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    ({totalFatura > 0 ? ((catTotal / totalFatura) * 100).toFixed(1) : 0}% da fatura)
-                  </span>
+                <div key={cat} className="border border-border/40 rounded-xl overflow-hidden shadow-sm bg-white">
+                  {/* Category Header */}
+                  <div className="px-5 py-3 border-b border-border/30 bg-muted/30 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                        {getCatIcon(cat)}
+                      </span>
+                      <h4 className="font-display font-700 text-sm text-foreground">{cat}</h4>
+                      <span className="text-[11px] text-muted-foreground font-medium">({catTxs.length} {catTxs.length === 1 ? 'lançamento' : 'lançamentos'})</span>
+                    </div>
+                    <div className="font-display font-700 text-sm text-primary tabular-nums">
+                      Subtotal: {fmtBRL(catTotal)}
+                    </div>
+                  </div>
+
+                  {/* Transactions Table for this Category */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/10 text-[9px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/20">
+                          <th className="text-left px-5 py-2.5 w-[100px]">Data</th>
+                          <th className="text-left px-5 py-2.5">Descrição</th>
+                          <th className="text-left px-5 py-2.5 w-[180px]">Reclassificar</th>
+                          <th className="text-right px-5 py-2.5 w-[120px]">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/10">
+                        {catTxs.map((t) => (
+                          <tr key={t.id} className="hover:bg-primary/[0.01] transition-colors duration-100">
+                            <td className="px-5 py-2.5 tabular text-muted-foreground text-xs font-medium">
+                              {t.date}
+                            </td>
+                            <td className="px-5 py-2.5 font-semibold text-foreground max-w-[320px] truncate" title={t.description}>
+                              {t.description}
+                            </td>
+                            <td className="px-5 py-2.5">
+                              <select
+                                value={t.category}
+                                onChange={(e) => onUpdateCategory?.(t.id, e.target.value)}
+                                className="w-full max-w-[160px] text-xs font-medium bg-white/60 hover:bg-white border border-border/50 hover:border-primary/40 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
+                                style={{
+                                  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")`,
+                                  backgroundRepeat: 'no-repeat',
+                                  backgroundPosition: 'right 8px center',
+                                  backgroundSize: '8px',
+                                  paddingRight: '24px'
+                                }}
+                              >
+                                {categories.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className={`px-5 py-2.5 text-right tabular font-700 ${
+                              t.category === "Tarifas" ? "text-destructive" : "text-foreground"
+                            }`}>
+                              {fmtBRL(t.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Somatória ao final de cada categoria */}
+                  <div className="px-5 py-2 border-t border-border/20 bg-muted/5 flex items-center justify-end gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                    <span>Total {cat}:</span>
+                    <span className="font-display font-800 text-sm text-foreground tabular-nums">{fmtBRL(catTotal)}</span>
+                  </div>
                 </div>
               );
-            })()}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/30">
-                  <th className="text-left px-6 py-3.5 w-[120px]">Data Compra</th>
-                  <th className="text-left px-6 py-3.5">Descrição</th>
-                  <th className="text-left px-6 py-3.5 w-[200px]">Categoria</th>
-                  <th className="text-right px-6 py-3.5 w-[140px]">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/20">
-                {filtered
-                  .filter((t) => catFilter === "Todas" || t.category === catFilter)
-                  .map((t) => (
-                  <tr key={t.id} className={`hover:bg-primary/[0.02] transition-colors duration-100 ${
-                    t.category === "Tarifas" ? "bg-destructive/[0.02]" : ""
-                  }`}>
-                    <td className="px-6 py-3.5 tabular text-muted-foreground text-xs font-medium">
-                      {t.date.split("-").reverse().join("/")}
-                    </td>
-                    <td className="px-6 py-3.5 font-semibold text-foreground max-w-[320px] truncate" title={t.description}>
-                      {t.description}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <select
-                        value={t.category}
-                        onChange={(e) => onUpdateCategory?.(t.id, e.target.value)}
-                        className="w-full max-w-[185px] text-xs font-medium bg-white/60 hover:bg-white border border-border/50 hover:border-primary/40 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 10px center',
-                          backgroundSize: '10px',
-                          paddingRight: '28px'
-                        }}
-                      >
-                        {categories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className={`px-6 py-3.5 text-right tabular font-700 ${
-                      t.category === "Tarifas" ? "text-destructive" : "text-foreground"
-                    }`}>
-                      {fmtBRL(t.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.filter((t) => catFilter === "Todas" || t.category === catFilter).length === 0 && (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                Nenhum lançamento encontrado{catFilter !== "Todas" ? ` em "${catFilter}"` : " nesta fatura"}.
-              </div>
-            )}
+            })}
           </div>
         </>
       ) : (
