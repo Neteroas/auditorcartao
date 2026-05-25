@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { RawTransaction } from "@/lib/pdfExtract";
+import { useMemo, useRef, useState } from "react";
+import type { RawTransaction, InvoiceSummary } from "@/lib/pdfExtract";
 import {
   aggregateByCategory,
   aggregateByMonth,
@@ -17,13 +17,18 @@ import {
   CheckCircle2, Calendar, Trash2, BarChart2, Tag, CreditCard,
   ChevronRight, ArrowUpRight, ArrowDownRight, Smartphone,
   Utensils, ShoppingCart, Car, Stethoscope, Tv, Ticket,
-  GraduationCap, Briefcase, Zap, ShieldAlert, CarFront, ListFilter
+  GraduationCap, Briefcase, Zap, ShieldAlert, CarFront, ListFilter,
+  Plus, Pencil, Check, X, Info, Download, FileText
 } from "lucide-react";
 
 interface Props {
   txs: RawTransaction[];
   onClear: () => void;
   onUpdateCategory?: (id: string, newCategory: string) => void;
+  categoriesList: string[];
+  onAddCategory: (name: string) => void;
+  onRenameCategory: (oldName: string, newName: string) => void;
+  summaries: Record<string, InvoiceSummary>;
   headerActions?: React.ReactNode;
 }
 
@@ -40,7 +45,7 @@ const CHART_COLORS = [
 
 type Tab = "panorama" | "revisar" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
 
-export function Dashboard({ txs, onClear, onUpdateCategory, headerActions }: Props) {
+export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAddCategory, onRenameCategory, summaries, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
@@ -177,10 +182,20 @@ export function Dashboard({ txs, onClear, onUpdateCategory, headerActions }: Pro
             onUpdateCategory={onUpdateCategory} 
             invoiceSources={invoiceSources} 
             activeSource={activeSource} 
-            setActiveSource={setSelectedSource} 
+            setActiveSource={setSelectedSource}
+            categoriesList={categoriesList}
+            summaries={summaries}
           />
         )}
-        {tab === "categorias" && <CategoriesView categories={categories} total={total} />}
+        {tab === "categorias" && (
+          <CategoriesView
+            categories={categories}
+            total={total}
+            categoriesList={categoriesList}
+            onAddCategory={onAddCategory}
+            onRenameCategory={onRenameCategory}
+          />
+        )}
         {tab === "mensal"     && <MonthlyView months={months} />}
         {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} />}
         {tab === "parcelas"   && <FutureView future={future} />}
@@ -211,7 +226,7 @@ function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
 }
 
 /* ── Categorias Icons Helper ── */
-export const getCatIcon = (cat: string) => {
+const getCatIcon = (cat: string) => {
   switch (cat) {
     case "Alimentação": return <Utensils className="size-3.5" />;
     case "Mercado": return <ShoppingCart className="size-3.5" />;
@@ -470,40 +485,120 @@ function ChartTip({ active, payload, label }: any) {
 }
 
 /* ── Categories ── */
-function CategoriesView({ categories, total }: {
-  categories: ReturnType<typeof aggregateByCategory>; total: number;
+function CategoriesView({ categories, total, categoriesList, onAddCategory, onRenameCategory }: {
+  categories: ReturnType<typeof aggregateByCategory>;
+  total: number;
+  categoriesList: string[];
+  onAddCategory: (name: string) => void;
+  onRenameCategory: (oldName: string, newName: string) => void;
 }) {
   const max = categories[0]?.total || 1;
+  const [newCatName, setNewCatName] = useState("");
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
+
+  function startEdit(name: string) {
+    setEditingCat(name);
+    setEditingValue(name);
+    setTimeout(() => editRef.current?.focus(), 50);
+  }
+
+  function confirmEdit() {
+    if (editingCat) onRenameCategory(editingCat, editingValue);
+    setEditingCat(null);
+  }
+
   return (
-    <div className="glass-card overflow-hidden">
-      <div className="p-6 border-b border-border/40">
-        <SectionTitle eyebrow="II" title="Categorização integral de gastos" />
+    <div className="space-y-5">
+      {/* Stats table */}
+      <div className="glass-card overflow-hidden">
+        <div className="p-6 border-b border-border/40">
+          <SectionTitle eyebrow="II" title="Categorização integral de gastos" />
+        </div>
+        <div className="divide-y divide-border/30">
+          {categories.map((c, i) => (
+            <div key={c.category} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors duration-150">
+              <div className="col-span-1 text-center">
+                <span className="text-[10px] font-mono font-bold text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
+              </div>
+              <div className="col-span-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="size-2.5 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                  <span className="font-semibold text-sm text-foreground">{c.category}</span>
+                </div>
+              </div>
+              <div className="col-span-4">
+                <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${(c.total / max) * 100}%`, background: CHART_COLORS[i % CHART_COLORS.length] }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">{((c.total / total) * 100).toFixed(1)}% da fatura</p>
+              </div>
+              <div className="col-span-1 text-center text-sm text-muted-foreground font-mono">{c.count}</div>
+              <div className="col-span-2 text-right font-mono font-semibold text-sm">{fmtBRL(c.total)}</div>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="divide-y divide-border/30">
-        {categories.map((c, i) => (
-          <div key={c.category} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors duration-150">
-            <div className="col-span-1 text-center">
-              <span className="text-[10px] font-mono font-bold text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
-            </div>
-            <div className="col-span-4">
-              <div className="flex items-center gap-2.5">
-                <span className="size-2.5 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                <span className="font-semibold text-sm text-foreground">{c.category}</span>
-              </div>
-            </div>
-            <div className="col-span-4">
-              <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${(c.total / max) * 100}%`, background: CHART_COLORS[i % CHART_COLORS.length] }}
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">{((c.total / total) * 100).toFixed(1)}% da fatura</p>
-            </div>
-            <div className="col-span-1 text-center text-sm text-muted-foreground font-mono">{c.count}</div>
-            <div className="col-span-2 text-right font-mono font-semibold text-sm">{fmtBRL(c.total)}</div>
+
+      {/* Category manager */}
+      <div className="glass-card overflow-hidden">
+        <div className="p-6 border-b border-border/40 flex items-center justify-between gap-4">
+          <SectionTitle eyebrow="II·B" title="Gerenciar categorias" />
+          <div className="flex items-center gap-2">
+            <input
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { onAddCategory(newCatName); setNewCatName(""); } }}
+              placeholder="Nova categoria…"
+              className="text-sm font-medium bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 placeholder:text-muted-foreground/50 shadow-sm w-48"
+            />
+            <button
+              onClick={() => { onAddCategory(newCatName); setNewCatName(""); }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 shadow-sm"
+            >
+              <Plus className="size-3.5" /> Adicionar
+            </button>
           </div>
-        ))}
+        </div>
+        <div className="p-4 flex flex-wrap gap-2">
+          {categoriesList.map((cat) => (
+            <div key={cat} className="flex items-center gap-1.5 bg-white border border-border/50 rounded-lg px-3 py-1.5 shadow-sm group">
+              {editingCat === cat ? (
+                <>
+                  <input
+                    ref={editRef}
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditingCat(null); }}
+                    className="text-xs font-medium border-b border-primary/50 outline-none bg-transparent w-28"
+                  />
+                  <button onClick={confirmEdit} className="text-green-600 hover:text-green-700"><Check className="size-3" /></button>
+                  <button onClick={() => setEditingCat(null)} className="text-muted-foreground hover:text-destructive"><X className="size-3" /></button>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold text-foreground">{cat}</span>
+                  <button
+                    onClick={() => startEdit(cat)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                  >
+                    <Pencil className="size-3" />
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="px-4 pb-4">
+          <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-3 border border-border/30">
+            <Info className="size-3.5 flex-shrink-0 mt-0.5" />
+            <span>Para <strong>renomear</strong> uma categoria, passe o mouse sobre ela e clique no lápis. Ao renomear, todos os lançamentos com essa categoria serão atualizados automaticamente.</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -779,25 +874,89 @@ function LedgerView({ txs }: { txs: RawTransaction[] }) {
   );
 }
 
+/* ── Invoice Summary Panel ── */
+function InvoiceSummaryPanel({ summary }: { summary: InvoiceSummary }) {
+  const rows = [
+    { label: "Saldo anterior",       value: summary.previousBalance,  color: summary.previousBalance > 0 ? "text-destructive" : "text-foreground" },
+    { label: "Pagamentos / Créditos",value: summary.paymentsCredits,  color: "text-emerald-600" },
+    { label: "Compras nacionais",     value: summary.localPurchases,   color: "text-foreground" },
+    { label: "Compras internacionais",value: summary.intlPurchases,    color: "text-foreground" },
+    { label: "Tarifas / Encargos / Multas", value: summary.feesAndCharges, color: summary.feesAndCharges > 0 ? "text-destructive" : "text-foreground" },
+  ].filter((r) => r.value !== 0);
+
+  return (
+    <div className="mx-5 mb-5 border border-primary/20 rounded-xl overflow-hidden shadow-sm">
+      <div className="px-5 py-3 bg-primary/5 border-b border-primary/15 flex items-center gap-2">
+        <CreditCard className="size-4 text-primary" />
+        <p className="text-xs font-bold text-primary uppercase tracking-widest">Resumo da Fatura (extraído do PDF)</p>
+      </div>
+      <div className="divide-y divide-border/20 bg-white">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between px-5 py-2.5">
+            <span className="text-xs font-medium text-muted-foreground">{r.label}</span>
+            <span className={`tabular text-sm font-700 font-mono ${r.color}`}>{fmtBRL(r.value)}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between px-5 py-3 bg-muted/10">
+          <span className="text-xs font-bold uppercase tracking-widest text-foreground">Total a pagar</span>
+          <span className="tabular text-base font-800 font-mono text-primary">{fmtBRL(summary.totalAmount)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── CSV Export helper ── */
+function exportCSV(txs: RawTransaction[], filename: string) {
+  const header = "Data;Descrição;Categoria;Parcela;Valor (R$)";
+  const rows = txs.map((t) => {
+    const inst = t.installment ? `${t.installment.current}/${t.installment.total}` : "";
+    const val = t.amount.toFixed(2).replace(".", ",");
+    const desc = t.description.replace(/;/g, ",");
+    return `${t.date};${desc};${t.category};${inst};${val}`;
+  });
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/\.[^/.]+$/, "") + "_auditoria.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Sort transactions by dd/mm numerically ── */
+function sortByDate(txs: RawTransaction[]): RawTransaction[] {
+  return [...txs].sort((a, b) => {
+    const parseDD = (date: string) => {
+      const [d, m] = date.split("/").map(Number);
+      return (m || 0) * 100 + (d || 0);
+    };
+    return parseDD(a.date) - parseDD(b.date);
+  });
+}
+
 /* ── Revisar Fatura ── */
 function RevisarView({
   txs,
   onUpdateCategory,
   invoiceSources,
   activeSource,
-  setActiveSource
+  setActiveSource,
+  categoriesList,
+  summaries,
 }: {
   txs: RawTransaction[];
   onUpdateCategory?: (id: string, newCategory: string) => void;
   invoiceSources: string[];
   activeSource: string;
   setActiveSource: (s: string) => void;
+  categoriesList: string[];
+  summaries: Record<string, InvoiceSummary>;
 }) {
   const filtered = useMemo(() => {
     if (!activeSource) return [];
-    return txs
-      .filter((t) => t.source === activeSource)
-      .sort((a, b) => getSortValue(a) - getSortValue(b));
+    return sortByDate(txs.filter((t) => t.source === activeSource));
   }, [txs, activeSource]);
 
   const totalFatura = useMemo(() => {
@@ -809,16 +968,20 @@ function RevisarView({
   }, [filtered]);
 
   const totalComprasFat = totalFatura - totalJurosFat;
+  const activeSummary = summaries[activeSource];
 
-  const categories = [
-    "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
-    "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas", "Outros"
-  ];
+  // Get invoice due date for display
+  const invoiceDueDate = useMemo(() => {
+    const sample = filtered.find((t) => t.invoiceDueDate);
+    if (!sample?.invoiceDueDate) return null;
+    const [y, m, d] = sample.invoiceDueDate.split("-");
+    return `${d}/${m}/${y}`;
+  }, [filtered]);
 
   const invoiceCategories = useMemo(() => {
     const cats = new Set(filtered.map((t) => t.category));
-    return categories.filter((c) => cats.has(c));
-  }, [filtered]);
+    return categoriesList.filter((c) => cats.has(c));
+  }, [filtered, categoriesList]);
 
   return (
     <div className="glass-card overflow-hidden">
@@ -826,23 +989,35 @@ function RevisarView({
         <div>
           <SectionTitle eyebrow="Filtro de Fatura" title="Revisão de Lançamentos" />
           <p className="text-xs text-muted-foreground mt-1">
-            Selecione a fatura importada e revise as categorias de seus lançamentos.
+            Selecione a fatura e revise/reclassifique os lançamentos por categoria.
           </p>
         </div>
         
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Fatura/Arquivo:</label>
-          <select
-            value={activeSource}
-            onChange={(e) => setActiveSource(e.target.value)}
-            className="w-full sm:w-64 text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm text-foreground/80"
-          >
-            {invoiceSources.map((src) => (
-              <option key={src} value={src}>
-                {src.replace(/\.[^/.]+$/, "")}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Fatura:</label>
+            <select
+              value={activeSource}
+              onChange={(e) => setActiveSource(e.target.value)}
+              className="w-full sm:w-64 text-sm font-semibold bg-white border border-border/60 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-all duration-200 shadow-sm text-foreground/80"
+            >
+              {invoiceSources.map((src) => (
+                <option key={src} value={src}>
+                  {src.replace(/\.[^/.]+$/, "")}
+                </option>
+              ))}
+            </select>
+          </div>
+          {filtered.length > 0 && (
+            <button
+              onClick={() => exportCSV(filtered, activeSource)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white border border-border/60 hover:border-primary/40 hover:text-primary rounded-lg transition-all duration-200 shadow-sm text-muted-foreground"
+              title="Exportar lançamentos desta fatura em CSV"
+            >
+              <Download className="size-3.5" />
+              Exportar CSV
+            </button>
+          )}
         </div>
       </div>
 
@@ -865,73 +1040,109 @@ function RevisarView({
             <div className="bg-white border border-border/50 rounded-xl p-4 shadow-sm">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Lançamentos</p>
               <p className="font-display text-2xl font-800 text-foreground/80">{filtered.length}</p>
+              {invoiceDueDate && (
+                <p className="text-[9px] text-muted-foreground mt-1 flex items-center gap-1">
+                  <Calendar className="size-2.5" /> Venc. {invoiceDueDate}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Invoice Summary extracted from PDF — shown BEFORE transactions */}
+          {activeSummary && (
+            <div className="px-5 pt-5">
+              <InvoiceSummaryPanel summary={activeSummary} />
+            </div>
+          )}
+
           {/* Grouped by Category View */}
           <div className="p-5 flex flex-col gap-6">
+            {invoiceCategories.length === 0 && (
+              <div className="text-center py-10 text-muted-foreground text-sm">
+                <FileText className="size-8 mx-auto mb-3 opacity-30" />
+                Nenhum lançamento encontrado nesta fatura.
+              </div>
+            )}
             {invoiceCategories.map((cat) => {
-              const catTxs = filtered.filter((t) => t.category === cat);
+              const catTxs = sortByDate(filtered.filter((t) => t.category === cat));
               const catTotal = catTxs.reduce((s, t) => s + t.amount, 0);
+              const isTarifa = cat === "Tarifas";
               
               return (
-                <div key={cat} className="border border-border/40 rounded-xl overflow-hidden shadow-sm bg-white">
+                <div key={cat} className={`border rounded-xl overflow-hidden shadow-sm bg-white ${
+                  isTarifa ? "border-destructive/30" : "border-border/40"
+                }`}>
                   {/* Category Header */}
-                  <div className="px-5 py-3 border-b border-border/30 bg-muted/30 flex items-center justify-between">
+                  <div className={`px-5 py-3 border-b flex items-center justify-between ${
+                    isTarifa
+                      ? "bg-destructive/5 border-destructive/20"
+                      : "bg-muted/30 border-border/30"
+                  }`}>
                     <div className="flex items-center gap-2">
-                      <span className="p-1.5 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <span className={`p-1.5 rounded-lg flex items-center justify-center ${
+                        isTarifa ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
+                      }`}>
                         {getCatIcon(cat)}
                       </span>
-                      <h4 className="font-display font-700 text-sm text-foreground">{cat}</h4>
-                      <span className="text-[11px] text-muted-foreground font-medium">({catTxs.length} {catTxs.length === 1 ? 'lançamento' : 'lançamentos'})</span>
+                      <h4 className={`font-display font-700 text-sm ${
+                        isTarifa ? "text-destructive" : "text-foreground"
+                      }`}>{cat}</h4>
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        ({catTxs.length} {catTxs.length === 1 ? "lançamento" : "lançamentos"})
+                      </span>
                     </div>
-                    <div className="font-display font-700 text-sm text-primary tabular-nums">
+                    <div className={`font-display font-700 text-sm tabular-nums ${
+                      isTarifa ? "text-destructive" : "text-primary"
+                    }`}>
                       Subtotal: {fmtBRL(catTotal)}
                     </div>
                   </div>
 
-                  {/* Transactions Table for this Category */}
+                  {/* Transactions Table */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/10 text-[9px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/20">
-                          <th className="text-left px-5 py-2.5 w-[100px]">Data</th>
+                          <th className="text-left px-5 py-2.5 w-[90px]">Data</th>
                           <th className="text-left px-5 py-2.5">Descrição</th>
-                          <th className="text-left px-5 py-2.5 w-[180px]">Reclassificar</th>
-                          <th className="text-right px-5 py-2.5 w-[120px]">Valor</th>
+                          <th className="text-left px-5 py-2.5 w-[160px]">Reclassificar</th>
+                          <th className="text-right px-5 py-2.5 w-[110px]">Valor</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/10">
                         {catTxs.map((t) => (
-                          <tr key={t.id} className="hover:bg-primary/[0.01] transition-colors duration-100">
-                            <td className="px-5 py-2.5 tabular text-muted-foreground text-xs font-medium">
+                          <tr key={t.id} className="hover:bg-primary/[0.015] transition-colors duration-100">
+                            <td className="px-5 py-2.5 tabular text-muted-foreground text-xs font-mono font-medium">
                               {t.date}
                             </td>
                             <td className="px-5 py-2.5 font-semibold text-foreground max-w-[320px] truncate" title={t.description}>
                               {t.description}
+                              {t.installment && (
+                                <span className="ml-2 pill text-[9px] px-1.5 py-0.5 align-middle">
+                                  {t.installment.current}/{t.installment.total}
+                                </span>
+                              )}
                             </td>
                             <td className="px-5 py-2.5">
                               <select
                                 value={t.category}
                                 onChange={(e) => onUpdateCategory?.(t.id, e.target.value)}
-                                className="w-full max-w-[160px] text-xs font-medium bg-white/60 hover:bg-white border border-border/50 hover:border-primary/40 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
+                                className="w-full max-w-[150px] text-xs font-medium bg-white/60 hover:bg-white border border-border/50 hover:border-primary/40 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
                                 style={{
                                   backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")`,
-                                  backgroundRepeat: 'no-repeat',
-                                  backgroundPosition: 'right 8px center',
-                                  backgroundSize: '8px',
-                                  paddingRight: '24px'
+                                  backgroundRepeat: "no-repeat",
+                                  backgroundPosition: "right 8px center",
+                                  backgroundSize: "8px",
+                                  paddingRight: "24px",
                                 }}
                               >
-                                {categories.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c}
-                                  </option>
+                                {categoriesList.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
                                 ))}
                               </select>
                             </td>
-                            <td className={`px-5 py-2.5 text-right tabular font-700 ${
-                              t.category === "Tarifas" ? "text-destructive" : "text-foreground"
+                            <td className={`px-5 py-2.5 text-right tabular font-700 font-mono ${
+                              t.amount < 0 ? "text-emerald-600" : isTarifa ? "text-destructive" : "text-foreground"
                             }`}>
                               {fmtBRL(t.amount)}
                             </td>
@@ -941,15 +1152,34 @@ function RevisarView({
                     </table>
                   </div>
 
-                  {/* Somatória ao final de cada categoria */}
-                  <div className="px-5 py-2 border-t border-border/20 bg-muted/5 flex items-center justify-end gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                    <span>Total {cat}:</span>
-                    <span className="font-display font-800 text-sm text-foreground tabular-nums">{fmtBRL(catTotal)}</span>
+                  {/* Subtotal footer */}
+                  <div className={`px-5 py-2.5 border-t flex items-center justify-between ${
+                    isTarifa
+                      ? "bg-destructive/5 border-destructive/15"
+                      : "bg-muted/10 border-border/20"
+                  }`}>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Total {cat}
+                    </span>
+                    <span className={`font-display font-800 text-sm tabular-nums ${
+                      isTarifa ? "text-destructive" : "text-foreground"
+                    }`}>{fmtBRL(catTotal)}</span>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Grand total footer */}
+          {invoiceCategories.length > 0 && (
+            <div className="mx-5 mb-5 border border-primary/25 rounded-xl bg-primary/5 px-6 py-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Total geral desta fatura</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} lançamentos · {invoiceCategories.length} categorias</p>
+              </div>
+              <p className="font-display text-3xl font-800 text-primary tabular-nums">{fmtBRL(totalFatura)}</p>
+            </div>
+          )}
         </>
       ) : (
         <div className="text-center py-16 text-muted-foreground text-sm">

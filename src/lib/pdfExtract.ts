@@ -6,13 +6,27 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export interface RawTransaction {
   id: string;
-  date: string; // ISO yyyy-mm-dd
+  date: string; // "DD/MM" format
   description: string;
   amount: number; // BRL
   installment?: { current: number; total: number };
   category: string;
   source: string;
   invoiceDueDate?: string; // ISO yyyy-mm-dd (due date of the invoice)
+}
+
+export interface InvoiceSummary {
+  previousBalance: number;
+  paymentsCredits: number;
+  localPurchases: number;
+  intlPurchases: number;
+  feesAndCharges: number;
+  totalAmount: number;
+}
+
+export interface ExtractedData {
+  transactions: RawTransaction[];
+  summary?: InvoiceSummary;
 }
 
 const CATEGORIES: { name: string; keywords: RegExp }[] = [
@@ -154,7 +168,58 @@ function extractDueDateFromText(text: string, fallbackYear: number): string | nu
   return null;
 }
 
-export async function extractTransactions(file: File): Promise<RawTransaction[]> {
+function extractInvoiceSummary(text: string): InvoiceSummary | undefined {
+  const clean = text.replace(/\s+/g, " ");
+
+  const findBRL = (patterns: RegExp[]): number => {
+    for (const p of patterns) {
+      const m = clean.match(p);
+      if (m) {
+        const raw = m[1] || m[0];
+        const val = parseBRLNumber(raw);
+        if (!isNaN(val)) return val;
+      }
+    }
+    return 0;
+  };
+
+  const previousBalance = findBRL([
+    /saldo\s+(?:de\s+)?(?:fatura\s+)?anterior[^R\d]{0,20}((?:-\s?)?R?\$?\s?[\d.]+,\d{2})/i,
+    /saldo\s+anterior[:\s]+((?:-?\s?)(?:R\$\s?)?[\d.]+,\d{2})/i,
+  ]);
+
+  const paymentsCredits = findBRL([
+    /pagamentos?\s*[/\\e]?\s*cr[eé]ditos?[^R\d]{0,20}((?:-\s?)?R?\$?\s?[\d.]+,\d{2})/i,
+    /cr[eé]ditos?\s+(?:e\s+)?pagamentos?[:\s]+((?:-?\s?)(?:R\$\s?)?[\d.]+,\d{2})/i,
+  ]);
+
+  const localPurchases = findBRL([
+    /compras?\s+nacionais?[^R\d]{0,20}(R?\$?\s?[\d.]+,\d{2})/i,
+    /compras?\s+nacion[^R\d]{0,20}(R?\$?\s?[\d.]+,\d{2})/i,
+  ]);
+
+  const intlPurchases = findBRL([
+    /compras?\s+internacionais?[^R\d]{0,20}(R?\$?\s?[\d.]+,\d{2})/i,
+    /compras?\s+intern[^R\d]{0,20}(R?\$?\s?[\d.]+,\d{2})/i,
+  ]);
+
+  const feesAndCharges = findBRL([
+    /tarifas?,?\s*(?:encargos?\s*(?:e\s*)?)?multas?[^R\d]{0,30}(R?\$?\s?[\d.]+,\d{2})/i,
+    /encargos?\s*(?:e\s*)?multas?[^R\d]{0,30}(R?\$?\s?[\d.]+,\d{2})/i,
+    /juros\s*(?:e\s*)?encargos?[^R\d]{0,30}(R?\$?\s?[\d.]+,\d{2})/i,
+  ]);
+
+  const totalAmount = findBRL([
+    /total(?:\s+da\s+fatura)?[:\s]+(R?\$?\s?[\d.]+,\d{2})/i,
+    /(?:valor\s+)?total\s+a\s+pagar[:\s]+(R?\$?\s?[\d.]+,\d{2})/i,
+  ]);
+
+  if (!totalAmount && !localPurchases && !previousBalance) return undefined;
+
+  return { previousBalance, paymentsCredits, localPurchases, intlPurchases, feesAndCharges, totalAmount };
+}
+
+export async function extractData(file: File): Promise<ExtractedData> {
   const data = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data }).promise;
   let fullText = "";
@@ -240,5 +305,6 @@ export async function extractTransactions(file: File): Promise<RawTransaction[]>
     }
   }
 
-  return transactions;
+  const summary = extractInvoiceSummary(page1Text);
+  return { transactions, summary };
 }

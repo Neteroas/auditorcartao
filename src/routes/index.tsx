@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { extractTransactions, type RawTransaction } from "@/lib/pdfExtract";
+import { extractData, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
 import { ShieldCheck, Cpu, Lock } from "lucide-react";
@@ -25,9 +25,15 @@ export const Route = createFileRoute("/")(
 });
 
 const STORAGE_KEY = "atelier-audit-txs-v1";
+const CATEGORIES_KEY = "atelier-audit-categories-v1";
+const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
-/** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes,
- *  mesmo que o mesmo PDF seja reimportado acidentalmente. */
+export const DEFAULT_CATEGORIES = [
+  "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
+  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas", "Outros"
+];
+
+/** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
 function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
 }
@@ -36,11 +42,21 @@ function Index() {
   const [txs, setTxs] = useState<RawTransaction[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [summaries, setSummaries] = useState<Record<string, InvoiceSummary>>({});
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setTxs(JSON.parse(raw));
+    } catch {}
+    try {
+      const rawCats = localStorage.getItem(CATEGORIES_KEY);
+      if (rawCats) setCategoriesList(JSON.parse(rawCats));
+    } catch {}
+    try {
+      const rawSums = localStorage.getItem(SUMMARIES_KEY);
+      if (rawSums) setSummaries(JSON.parse(rawSums));
     } catch {}
   }, []);
 
@@ -48,22 +64,33 @@ function Index() {
     if (txs.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
   }, [txs]);
 
+  useEffect(() => {
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoriesList));
+  }, [categoriesList]);
+
+  useEffect(() => {
+    localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
+  }, [summaries]);
+
   async function handleFiles(files: File[]) {
     setBusy(true);
     setError(null);
     try {
       const all: RawTransaction[] = [];
+      const newSummaries: Record<string, InvoiceSummary> = {};
       const alreadyImported: string[] = [];
 
       for (const f of files) {
-        // Verificar se este arquivo já foi importado anteriormente
         const alreadyExists = txs.some((t) => t.source === f.name);
         if (alreadyExists) {
           alreadyImported.push(f.name);
-          continue; // Pular este arquivo
+          continue;
         }
-        const extracted = await extractTransactions(f);
-        all.push(...extracted);
+        const extracted = await extractData(f);
+        all.push(...extracted.transactions);
+        if (extracted.summary) {
+          newSummaries[f.name] = extracted.summary;
+        }
       }
 
       if (alreadyImported.length > 0) {
@@ -79,11 +106,14 @@ function Index() {
 
       if (all.length > 0) {
         setTxs((prev) => {
-          // Deduplicar pela chave composta: mesmo source+data+desc+valor nunca entra duas vezes
           const existingKeys = new Set(prev.map(txKey));
           const newUnique = all.filter((t) => !existingKeys.has(txKey(t)));
           return [...prev, ...newUnique];
         });
+      }
+
+      if (Object.keys(newSummaries).length > 0) {
+        setSummaries((prev) => ({ ...prev, ...newSummaries }));
       }
     } catch (e: any) {
       setError(e?.message || "Falha ao processar PDF.");
@@ -94,12 +124,29 @@ function Index() {
 
   function handleClear() {
     setTxs([]);
+    setSummaries({});
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SUMMARIES_KEY);
   }
 
   function handleUpdateCategory(id: string, newCategory: string) {
     setTxs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
+    );
+  }
+
+  function handleAddCategory(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || categoriesList.includes(trimmed)) return;
+    setCategoriesList((prev) => [...prev, trimmed]);
+  }
+
+  function handleRenameCategory(oldName: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName || categoriesList.includes(trimmed)) return;
+    setCategoriesList((prev) => prev.map((c) => (c === oldName ? trimmed : c)));
+    setTxs((prev) =>
+      prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t))
     );
   }
 
@@ -186,6 +233,10 @@ function Index() {
               txs={txs} 
               onClear={handleClear} 
               onUpdateCategory={handleUpdateCategory}
+              categoriesList={categoriesList}
+              onAddCategory={handleAddCategory}
+              onRenameCategory={handleRenameCategory}
+              summaries={summaries}
               headerActions={<UploadDropzone onFiles={handleFiles} busy={busy} compact />} 
             />
           </section>
