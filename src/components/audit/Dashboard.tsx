@@ -420,46 +420,6 @@ function Panorama({ months, categories, txs }: {
         </div>
       </div>
 
-      {/* ── 2. Assinaturas e Recorrências ── */}
-      {subList.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-5">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Plataformas, IAs & Streamings</p>
-            <div className="h-px bg-border flex-1 ml-2 opacity-50" />
-          </div>
-          <div className="glass-card p-6 border-t-4 border-t-[#8b5cf6]">
-            <div className="flex flex-col md:flex-row gap-8">
-              <div className="md:w-64 border-b md:border-b-0 md:border-r border-border/40 pb-6 md:pb-0 md:pr-6 flex flex-col justify-center">
-                <div className="size-10 rounded-xl bg-purple-100 flex items-center justify-center mb-4 border border-purple-200">
-                  <Tv className="size-5 text-purple-600" />
-                </div>
-                <h3 className="font-display text-lg font-700">Levantamento de Assinaturas</h3>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                  Custo recorrente estimado baseado nos serviços digitais identificados na fatura.
-                </p>
-                <div className="mt-6">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Custo Mensal</p>
-                  <p className="font-display text-3xl font-800 text-purple-700">{fmtBRL(totalSubs)}</p>
-                </div>
-              </div>
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {subList.map((sub, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-border/40 bg-muted/10 hover:bg-muted/30 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate max-w-[120px]" title={sub.desc}>{sub.desc}</p>
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">{sub.occurrences} cobranças</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs font-bold font-mono">{fmtBRL(sub.amount)}</p>
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">/mês</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── 3. Gráficos removidos ── */}
     </div>
