@@ -29,7 +29,7 @@ const CATEGORIES_KEY = "atelier-audit-categories-v1";
 const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
-  "Ifood / Restaurantes", "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
+  "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
   "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas",
   "Pagamentos/Créditos", "Outros"
 ];
@@ -49,12 +49,24 @@ function Index() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setTxs(JSON.parse(raw));
+      if (raw) {
+        let loadedTxs = JSON.parse(raw);
+        loadedTxs = loadedTxs.map((t: any) => {
+          if (t.category === "Mercado") {
+            return { ...t, category: "Mercados / Panificadoras" };
+          }
+          return t;
+        });
+        setTxs(loadedTxs);
+      }
     } catch {}
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
       if (rawCats) {
-        const loaded = JSON.parse(rawCats);
+        let loaded = JSON.parse(rawCats);
+        // Migrate: rename "Mercado" to "Mercados / Panificadoras"
+        loaded = loaded.map((c: string) => c === "Mercado" ? "Mercados / Panificadoras" : c);
+        
         // Migrate: add Pagamentos/Créditos if missing
         if (!loaded.includes("Pagamentos/Créditos")) {
           const idx = loaded.indexOf("Outros");

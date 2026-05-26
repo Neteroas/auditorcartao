@@ -102,7 +102,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
   // Visão Geral metrics
   const totalJuros = positives.filter(t => t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
-  const totalAlim  = positives.filter(t => t.category === "Alimentação" || t.category === "Mercado").reduce((s, t) => s + t.amount, 0);
+  const totalAlim  = positives.filter(t => t.category === "Alimentação" || t.category === "Mercados / Panificadoras").reduce((s, t) => s + t.amount, 0);
   const totalTrans = positives.filter(t => t.category === "Transporte").reduce((s, t) => s + t.amount, 0);
 
   const monthDelta = (() => {
@@ -329,7 +329,7 @@ const getCatIcon = (cat: string) => {
   switch (cat) {
     case "Ifood / Restaurantes": return <Utensils className="size-3.5" />;
     case "Alimentação": return <Utensils className="size-3.5" />;
-    case "Mercado": return <ShoppingCart className="size-3.5" />;
+    case "Mercados / Panificadoras": return <ShoppingCart className="size-3.5" />;
     case "Transporte": return <CarFront className="size-3.5" />;
     case "Assinaturas": return <Tv className="size-3.5" />;
     case "Saúde": return <Stethoscope className="size-3.5" />;
