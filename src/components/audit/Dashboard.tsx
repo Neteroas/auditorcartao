@@ -50,7 +50,45 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
   const positives = useMemo(() => txs.filter((t) => t.amount > 0), [txs]);
-  const months    = useMemo(() => aggregateByMonth(txs), [txs]);
+  const months = useMemo(() => {
+    const rawMonths = aggregateByMonth(txs);
+    return rawMonths.map(m => {
+      // Find all sources (files) contributing to this month's transactions
+      const sourcesForMonth = Array.from(new Set(
+        txs.filter(t => (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month)
+           .map(t => t.source)
+      ));
+      
+      let previousBalance = 0;
+      let totalAmount = 0;
+      let hasSummary = false;
+
+      for (const src of sourcesForMonth) {
+        const summ = summaries[src];
+        if (summ) {
+          previousBalance += summ.previousBalance;
+          totalAmount += summ.totalAmount;
+          hasSummary = true;
+        }
+      }
+
+      const monthNegatives = txs.filter(t => t.amount < 0 && (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month);
+      const creditsTotal = monthNegatives.reduce((acc, t) => acc + t.amount, 0);
+
+      const finalTotalAmount = hasSummary ? totalAmount : (m.total + creditsTotal);
+
+      return {
+        ...m,
+        previousBalance,
+        totalAmount: finalTotalAmount,
+        creditsTotal,
+        hasSummary,
+        originalTotal: m.total,
+        total: finalTotalAmount
+      };
+    });
+  }, [txs, summaries]);
+  const totalFaturasConsolidado = useMemo(() => months.reduce((acc, m) => acc + m.total, 0), [months]);
   const categories = useMemo(() => aggregateByCategory(txs), [txs]);
   const future    = useMemo(() => projectFutureInstallments(txs), [txs]);
   const insights  = useMemo(() => generateInsights(txs), [txs]);
@@ -118,7 +156,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiTopBorder
             label="Total das faturas"
-            value={fmtBRL(total)}
+            value={fmtBRL(totalFaturasConsolidado)}
             sub={`${months.map(m => m.label.split(" ")[0]).join(" + ")}`}
             color="oklch(0.47 0.21 270)"
             valueColor="text-[#1e40af]"
@@ -289,7 +327,8 @@ function Panorama({ months, categories, txs }: {
             const theme = cardThemes[i % cardThemes.length];
             const isMax = m.total === maxMonth && months.length > 1;
             const juros = m.byCategory["Tarifas"] || 0;
-            const compras = m.total - juros;
+            const originalTotal = m.originalTotal ?? m.total;
+            const compras = originalTotal - juros;
             
             // Ordenar categorias do mês (Tarifas sempre por último)
             const sortedCats = Object.entries(m.byCategory).sort((a, b) => {
@@ -342,8 +381,14 @@ function Panorama({ months, categories, txs }: {
                   })}
                 </div>
                 
-                {/* Footer: Compras + Tarifas breakdown — Print 4 request */}
+                {/* Footer: Compras + Tarifas breakdown */}
                 <div className="px-6 pt-4 pb-5 border-t border-black/5 flex flex-col gap-2">
+                  {m.previousBalance !== undefined && m.previousBalance > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saldo Anterior</span>
+                      <span className="font-display text-sm font-700 text-foreground/80">{fmtBRL(m.previousBalance)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Compras</span>
                     <span className={`font-display text-sm font-700 ${theme.hl}`}>{fmtBRL(compras)}</span>
@@ -354,8 +399,16 @@ function Panorama({ months, categories, txs }: {
                       <span className="font-display text-sm font-700 text-destructive">{fmtBRL(juros)}</span>
                     </div>
                   )}
+                  {m.creditsTotal !== undefined && m.creditsTotal < 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Créditos / Pagos</span>
+                      <span className="font-display text-sm font-700 text-emerald-600">{fmtBRL(m.creditsTotal)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pt-1.5 border-t border-black/8 mt-0.5">
-                    <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">Total Fatura</span>
+                    <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">
+                      {m.previousBalance !== undefined && m.previousBalance > 0 ? "Total a Pagar" : "Total Fatura"}
+                    </span>
                     <span className={`font-display text-sm font-800 ${theme.title}`}>{fmtBRL(m.total)}</span>
                   </div>
                 </div>
@@ -662,7 +715,7 @@ function MonthlyView({ months }: { months: ReturnType<typeof aggregateByMonth> }
                     <td className="px-6 py-4 font-semibold text-foreground">{m.label}</td>
                     <td className="px-6 py-4 text-right tabular text-muted-foreground">{m.count}</td>
                     <td className="px-6 py-4 text-right tabular font-semibold">{fmtBRL(m.total)}</td>
-                    <td className="px-6 py-4 text-right tabular text-muted-foreground">{fmtBRL(m.total / m.count)}</td>
+                    <td className="px-6 py-4 text-right tabular text-muted-foreground">{fmtBRL((m.originalTotal ?? m.total) / m.count)}</td>
                     <td className="px-6 py-4">
                       <span className="pill pill text-[10px]">{leader?.[0]}</span>
                     </td>
@@ -961,8 +1014,9 @@ function RevisarView({
   }, [txs, activeSource]);
 
   const totalFatura = useMemo(() => {
-    return filtered.reduce((s, t) => s + t.amount, 0);
-  }, [filtered]);
+    const prevBal = activeSummary?.previousBalance || 0;
+    return prevBal + filtered.reduce((s, t) => s + t.amount, 0);
+  }, [filtered, activeSummary]);
 
   const totalJurosFat = useMemo(() => {
     return filtered.filter((t) => t.amount > 0 && t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
