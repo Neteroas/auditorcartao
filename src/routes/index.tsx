@@ -74,7 +74,8 @@ function Index() {
   }, []);
 
   useEffect(() => {
-    if (txs.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
+    // Always persist (even empty array) so removals are saved to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
   }, [txs]);
 
   useEffect(() => {
@@ -144,6 +145,15 @@ function Index() {
     setSummaries({});
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SUMMARIES_KEY);
+  }
+
+  function handleRemoveSource(source: string) {
+    setTxs((prev) => prev.filter((t) => t.source !== source));
+    setSummaries((prev) => {
+      const next = { ...prev };
+      delete next[source];
+      return next;
+    });
   }
 
   function handleUpdateCategory(id: string, newCategory: string) {
@@ -254,6 +264,7 @@ function Index() {
               onAddCategory={handleAddCategory}
               onRenameCategory={handleRenameCategory}
               summaries={summaries}
+              onRemoveSource={handleRemoveSource}
               headerActions={<UploadDropzone onFiles={handleFiles} busy={busy} compact />} 
             />
           </section>

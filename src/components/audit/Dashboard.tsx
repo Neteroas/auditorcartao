@@ -30,6 +30,7 @@ interface Props {
   onAddCategory: (name: string) => void;
   onRenameCategory: (oldName: string, newName: string) => void;
   summaries: Record<string, InvoiceSummary>;
+  onRemoveSource?: (source: string) => void;
   headerActions?: React.ReactNode;
 }
 
@@ -46,7 +47,7 @@ const CHART_COLORS = [
 
 type Tab = "panorama" | "revisar" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
 
-export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAddCategory, onRenameCategory, summaries, headerActions }: Props) {
+export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAddCategory, onRenameCategory, summaries, onRemoveSource, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
@@ -194,7 +195,66 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── FATURAS IMPORTADAS ── */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Faturas Importadas · {invoiceSources.length} arquivo{invoiceSources.length !== 1 ? 's' : ''}</p>
+          <div className="h-px bg-border flex-1 ml-2 opacity-50" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {invoiceSources.map((src) => {
+            const count = txs.filter(t => t.source === src).length;
+            const summary = summaries[src];
+            const dueDateTx = txs.find(t => t.source === src && t.invoiceDueDate);
+            const dueDate = dueDateTx?.invoiceDueDate
+              ? (() => { const [y, m, d] = dueDateTx.invoiceDueDate!.split('-'); return `${d}/${m}/${y}`; })()
+              : null;
+            return (
+              <div
+                key={src}
+                className={`flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 shadow-sm bg-white ${
+                  src === activeSource
+                    ? 'border-primary/50 text-primary bg-primary/5'
+                    : 'border-border/50 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                }`}
+              >
+                <button
+                  onClick={() => { setSelectedSource(src); setTab('revisar'); }}
+                  className="flex items-center gap-2 cursor-pointer"
+                  title={`Clique para revisar esta fatura`}
+                >
+                  <FileText className="size-3 flex-shrink-0" />
+                  <span className="max-w-[160px] truncate">{src.replace(/\.[^/.]+$/, '')}</span>
+                  <span className="px-1.5 py-0.5 rounded-md bg-muted/60 text-[10px] font-bold">{count} lanç.</span>
+                  {dueDate && (
+                    <span className="text-[10px] font-normal flex items-center gap-1">
+                      <Calendar className="size-2.5" /> Venc. {dueDate}
+                    </span>
+                  )}
+                  {summary && (
+                    <span className="text-[10px] font-bold text-primary">{fmtBRL(summary.totalAmount)}</span>
+                  )}
+                </button>
+                {onRemoveSource && (
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remover fatura "${src.replace(/\.[^/.]+$/, '')}" e seus ${count} lançamentos?`)) {
+                        onRemoveSource(src);
+                      }
+                    }}
+                    className="ml-1 p-0.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors duration-150"
+                    title="Remover esta fatura"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+
       <div className="flex items-center gap-1 p-1 bg-white border border-border/60 rounded-xl shadow-sm mb-8 overflow-x-auto">
         {tabs.map((t) => (
           <button
