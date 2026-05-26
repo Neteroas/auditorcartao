@@ -95,15 +95,19 @@ function Index() {
 
       for (const f of files) {
         const alreadyExists = txs.some((t) => t.source === f.name);
+        
+        // Always extract to ensure the invoice summary is populated/updated
+        const extracted = await extractData(f);
+        if (extracted.summary) {
+          newSummaries[f.name] = extracted.summary;
+        }
+
         if (alreadyExists) {
           alreadyImported.push(f.name);
           continue;
         }
-        const extracted = await extractData(f);
+        
         all.push(...extracted.transactions);
-        if (extracted.summary) {
-          newSummaries[f.name] = extracted.summary;
-        }
       }
 
       if (alreadyImported.length > 0) {
