@@ -283,6 +283,7 @@ const getCatIcon = (cat: string) => {
 };
 
 /* ── Panorama ── */
+type EnrichedMonth = MonthAgg & { originalTotal?: number; previousBalance?: number; hasSummary?: boolean; totalAmount?: number; creditsTotal?: number };
 function Panorama({ months, categories, txs }: {
   months: MonthAgg[]; categories: ReturnType<typeof aggregateByCategory>; txs: RawTransaction[];
 }) {
