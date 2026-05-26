@@ -327,6 +327,7 @@ function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
 /* ── Categorias Icons Helper ── */
 const getCatIcon = (cat: string) => {
   switch (cat) {
+    case "Ifood / Restaurantes": return <Utensils className="size-3.5" />;
     case "Alimentação": return <Utensils className="size-3.5" />;
     case "Mercado": return <ShoppingCart className="size-3.5" />;
     case "Transporte": return <CarFront className="size-3.5" />;

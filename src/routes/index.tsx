@@ -29,7 +29,7 @@ const CATEGORIES_KEY = "atelier-audit-categories-v1";
 const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
-  "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
+  "Ifood / Restaurantes", "Alimentação", "Mercado", "Transporte", "Assinaturas", "Compras Online",
   "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas",
   "Pagamentos/Créditos", "Outros"
 ];
@@ -55,14 +55,17 @@ function Index() {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
       if (rawCats) {
         const loaded = JSON.parse(rawCats);
+        // Migrate: add Pagamentos/Créditos if missing
         if (!loaded.includes("Pagamentos/Créditos")) {
-          // Insert it before "Outros" if "Outros" is present, else push
           const idx = loaded.indexOf("Outros");
-          if (idx !== -1) {
-            loaded.splice(idx, 0, "Pagamentos/Créditos");
-          } else {
-            loaded.push("Pagamentos/Créditos");
-          }
+          if (idx !== -1) loaded.splice(idx, 0, "Pagamentos/Créditos");
+          else loaded.push("Pagamentos/Créditos");
+        }
+        // Migrate: add Ifood / Restaurantes if missing
+        if (!loaded.includes("Ifood / Restaurantes")) {
+          const idx = loaded.indexOf("Alimentação");
+          if (idx !== -1) loaded.splice(idx, 0, "Ifood / Restaurantes");
+          else loaded.unshift("Ifood / Restaurantes");
         }
         setCategoriesList(loaded);
       }

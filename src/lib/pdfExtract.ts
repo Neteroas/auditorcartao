@@ -30,20 +30,26 @@ export interface ExtractedData {
 }
 
 const CATEGORIES: { name: string; keywords: RegExp }[] = [
-  { name: "Alimentação", keywords: /ifood|uber\s?eats|rappi|restaurant|padaria|lanchonete|burger|pizzar|cafe|café|mc\s?donald|bk|subway|outback|food/i },
-  { name: "Mercado", keywords: /mercado|supermerc|carrefour|extra|pao\s?de\s?acucar|assai|atacad|hortifr|sams\s?club|big/i },
-  { name: "Transporte", keywords: /uber|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina/i },
+  // iFood / entrega — vem ANTES de Alimentação para capturar IFD* e congeners
+  { name: "Ifood / Restaurantes", keywords: /\bifd\s*\*|ifood|uber\s?eats|rappi|deliverydireto|delivery/i },
+  // Alimentação: restaurantes, lanchonetes, padarias — mas NÃO delivery
+  { name: "Alimentação", keywords: /restaurant|padaria|lanchonete|burger|pizzar|cafe|café|mc\s?donald|\bbk\b|subway|outback/i },
+  // Compras Online vem ANTES de Mercado para capturar MERCADOLIVRE, MP*, etc.
+  { name: "Compras Online", keywords: /amazon|mercado\s?livre|mercadoliv|ec\s*\*\s*mercadoli|mp\s*\*\s*mercadoliv|\bmp\s*\*|shopee|magalu|magazine|aliexpress|americanas|submarino|shein/i },
+  // Mercado: apenas supermercados reais (sem "mercado" genérico para evitar falsos positivos)
+  { name: "Mercado", keywords: /supermerc|carrefour|\bextra\b|pao\s?de\s?acucar|assai|atacad|hortifr|sams\s?club|prezunic|mundial|gbarbosa|bistek|hipermercado/i },
+  { name: "Transporte", keywords: /\buber\b(?!\s?eats)|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina/i },
   { name: "Assinaturas", keywords: /netflix|spotify|amazon\s?prime|disney|hbo|youtube|apple\.com|icloud|google|microsoft|adobe|chatgpt|openai|claude|anthropic/i },
-  { name: "Compras Online", keywords: /amazon|mercado\s?livre|magalu|magazine|shopee|aliexpress|americanas|submarino|shein/i },
   { name: "Saúde", keywords: /farma|drogaria|drogasil|pacheco|raia|hospital|clinica|laborat|dentist|psico/i },
   { name: "Vestuário", keywords: /zara|renner|cea|c&a|riachuelo|nike|adidas|centauro|loja|fashion|hering/i },
-  { name: "Lazer", keywords: /cinema|ingresso|show|teatro|park|bar\s|pub|cervej|steam|playstation|xbox|nintendo/i },
+  { name: "Lazer", keywords: /cinema|ingresso|show|teatro|park|\bbar\s|pub|cervej|steam|playstation|xbox|nintendo/i },
   { name: "Viagem", keywords: /hotel|airbnb|booking|decolar|latam|gol|azul|smiles|cvc|hertz|localiza/i },
   { name: "Educação", keywords: /udemy|coursera|alura|hotmart|curso|escola|faculdade|colegio/i },
-  { name: "Serviços", keywords: /tim|vivo|claro|oi\s|net|sky|enel|cemig|sabesp|copasa|cpfl|seguro|condominio|aluguel/i },
+  { name: "Serviços", keywords: /tim|vivo|claro|\boi\s|\bnet\b|sky|enel|cemig|sabesp|copasa|cpfl|seguro|condominio|aluguel/i },
   { name: "Tarifas", keywords: /anuidade|tarifa|iof|juros|encargo|multa|seguro\s?cart/i },
   { name: "Pagamentos/Créditos", keywords: /pagamento|cr[eé]dito|estorno|reembolso|cashback|devolu/i },
 ];
+
 
 export function categorize(desc: string, amount?: number): string {
   // Negative amounts are always payments/credits
