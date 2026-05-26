@@ -7,6 +7,7 @@ import {
   generateInsights,
   projectFutureInstallments,
   getSortValue,
+  type MonthAgg,
 } from "@/lib/analytics";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -282,8 +283,9 @@ const getCatIcon = (cat: string) => {
 };
 
 /* ── Panorama ── */
+type EnrichedMonth = MonthAgg & { originalTotal?: number; previousBalance?: number; hasSummary?: boolean; totalAmount?: number; creditsTotal?: number };
 function Panorama({ months, categories, txs }: {
-  months: MonthAgg[]; categories: ReturnType<typeof aggregateByCategory>; txs: RawTransaction[];
+  months: EnrichedMonth[]; categories: ReturnType<typeof aggregateByCategory>; txs: RawTransaction[];
 }) {
   const maxMonth = Math.max(...months.map((m) => m.total));
 
@@ -459,56 +461,7 @@ function Panorama({ months, categories, txs }: {
         </div>
       )}
 
-      {/* ── 3. Gráficos Anteriores ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 pt-4">
-        <div className="lg:col-span-2 glass-card p-6">
-          <SectionTitle eyebrow="Fig. 01" title="Evolução de gastos por mês" />
-          <div className="h-72 mt-5">
-            <ResponsiveContainer>
-              <AreaChart data={months}>
-                <defs>
-                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="oklch(0.47 0.21 270)" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="oklch(0.47 0.21 270)" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="oklch(0.175 0.025 255 / 0.06)" strokeDasharray="3 4" vertical={false} />
-                <XAxis dataKey="label" stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 500 }} />
-                <YAxis stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<ChartTip />} />
-                <Area type="monotone" dataKey="total" stroke="oklch(0.47 0.21 270)" strokeWidth={2.5} fill="url(#areaGrad)" dot={{ fill: "oklch(0.47 0.21 270)", r: 4, strokeWidth: 2, stroke: "white" }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="glass-card p-6">
-          <SectionTitle eyebrow="Fig. 02" title="Composição por categoria" />
-          <div className="h-44 mt-4">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={categories.slice(0, 6)} dataKey="total" nameKey="category" innerRadius={48} outerRadius={80} paddingAngle={3}>
-                  {categories.slice(0, 6).map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <Tooltip content={<ChartTip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-3 space-y-2">
-            {categories.slice(0, 5).map((c, i) => (
-              <div key={c.category} className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="size-2 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="truncate font-medium text-foreground/80">{c.category}</span>
-                </span>
-                <span className="tabular text-muted-foreground ml-2 flex-shrink-0">{fmtBRL(c.total)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* ── 3. Gráficos removidos ── */}
     </div>
   );
 }
@@ -708,7 +661,7 @@ function MonthlyView({ months }: { months: ReturnType<typeof aggregateByMonth> }
               </tr>
             </thead>
             <tbody className="divide-y divide-border/25">
-              {months.map((m) => {
+              {months.map((m: EnrichedMonth) => {
                 const leader = Object.entries(m.byCategory).sort((a, b) => b[1] - a[1])[0];
                 return (
                   <tr key={m.month} className="hover:bg-primary/[0.02] transition-colors duration-150">
