@@ -1013,6 +1013,8 @@ function RevisarView({
     return sortByDate(txs.filter((t) => t.source === activeSource));
   }, [txs, activeSource]);
 
+  const activeSummary = summaries ? summaries[activeSource] : undefined;
+
   const totalFatura = useMemo(() => {
     const prevBal = activeSummary?.previousBalance || 0;
     return prevBal + filtered.reduce((s, t) => s + t.amount, 0);
@@ -1029,8 +1031,6 @@ function RevisarView({
   const totalComprasFat = useMemo(() => {
     return filtered.filter((t) => t.amount > 0 && t.category !== "Tarifas").reduce((s, t) => s + t.amount, 0);
   }, [filtered]);
-
-  const activeSummary = summaries[activeSource];
 
   // Get invoice due date for display
   const invoiceDueDate = useMemo(() => {
