@@ -7,6 +7,7 @@ import {
   generateInsights,
   projectFutureInstallments,
   getSortValue,
+  type MonthAgg,
 } from "@/lib/analytics";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -659,7 +660,7 @@ function MonthlyView({ months }: { months: ReturnType<typeof aggregateByMonth> }
               </tr>
             </thead>
             <tbody className="divide-y divide-border/25">
-              {months.map((m) => {
+              {months.map((m: EnrichedMonth) => {
                 const leader = Object.entries(m.byCategory).sort((a, b) => b[1] - a[1])[0];
                 return (
                   <tr key={m.month} className="hover:bg-primary/[0.02] transition-colors duration-150">
