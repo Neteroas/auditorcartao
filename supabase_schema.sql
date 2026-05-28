@@ -6,9 +6,9 @@
 create extension if not exists "uuid-ossp";
 
 -------------------------------------------------------------------------------
--- 1. TABELA: USER_CATEGORIES (Categorias Customizadas)
+-- 1. TABELA: CARD_CATEGORIES (Categorias Customizadas)
 -------------------------------------------------------------------------------
-create table if not exists public.user_categories (
+create table if not exists public.card_categories (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references auth.users(id) on delete cascade not null,
     name text not null,
@@ -19,21 +19,21 @@ create table if not exists public.user_categories (
 );
 
 -- Ativa Row Level Security (RLS)
-alter table public.user_categories enable row level security;
+alter table public.card_categories enable row level security;
 
 -- Políticas de Acesso Seguro (RLS)
 create policy "Usuários podem gerenciar apenas suas próprias categorias" 
-on public.user_categories for all 
+on public.card_categories for all 
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 -- Índices para melhor desempenho de busca
-create index if not exists idx_user_categories_user_id on public.user_categories(user_id);
+create index if not exists idx_card_categories_user_id on public.card_categories(user_id);
 
 -------------------------------------------------------------------------------
--- 2. TABELA: TRANSACTIONS (Lançamentos de Cartão)
+-- 2. TABELA: CARD_TRANSACTIONS (Lançamentos de Cartão)
 -------------------------------------------------------------------------------
-create table if not exists public.transactions (
+create table if not exists public.card_transactions (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references auth.users(id) on delete cascade not null,
     transaction_id text not null, -- ID único gerado no parser client-side
@@ -49,22 +49,22 @@ create table if not exists public.transactions (
 );
 
 -- Ativa Row Level Security (RLS)
-alter table public.transactions enable row level security;
+alter table public.card_transactions enable row level security;
 
 -- Políticas de Acesso Seguro (RLS)
 create policy "Usuários podem gerenciar apenas suas próprias transações" 
-on public.transactions for all 
+on public.card_transactions for all 
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 -- Índices para otimização de filtros, agregação e junções
-create index if not exists idx_transactions_user_id on public.transactions(user_id);
-create index if not exists idx_transactions_source on public.transactions(user_id, source);
+create index if not exists idx_card_transactions_user_id on public.card_transactions(user_id);
+create index if not exists idx_card_transactions_source on public.card_transactions(user_id, source);
 
 -------------------------------------------------------------------------------
--- 3. TABELA: INVOICE_SUMMARIES (Resumos Financeiros por Fatura)
+-- 3. TABELA: CARD_SUMMARIES (Resumos Financeiros por Fatura)
 -------------------------------------------------------------------------------
-create table if not exists public.invoice_summaries (
+create table if not exists public.card_summaries (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references auth.users(id) on delete cascade not null,
     source text not null, -- Nome da fatura PDF (chave única por usuário)
@@ -80,13 +80,13 @@ create table if not exists public.invoice_summaries (
 );
 
 -- Ativa Row Level Security (RLS)
-alter table public.invoice_summaries enable row level security;
+alter table public.card_summaries enable row level security;
 
 -- Políticas de Acesso Seguro (RLS)
 create policy "Usuários podem gerenciar apenas seus próprios resumos" 
-on public.invoice_summaries for all 
+on public.card_summaries for all 
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 -- Índices para buscas rápidas de resumo
-create index if not exists idx_invoice_summaries_user_id on public.invoice_summaries(user_id);
+create index if not exists idx_card_summaries_user_id on public.card_summaries(user_id);

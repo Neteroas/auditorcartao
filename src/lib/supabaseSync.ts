@@ -11,7 +11,7 @@ export async function fetchCloudData(userId: string) {
   try {
     // 1. Fetch transactions
     const { data: txsData, error: txsErr } = await supabase
-      .from("transactions")
+      .from("card_transactions")
       .select("*")
       .order("created_at", { ascending: true });
 
@@ -33,7 +33,7 @@ export async function fetchCloudData(userId: string) {
 
     // 2. Fetch custom categories
     const { data: catsData, error: catsErr } = await supabase
-      .from("user_categories")
+      .from("card_categories")
       .select("name");
 
     if (catsErr) throw catsErr;
@@ -41,7 +41,7 @@ export async function fetchCloudData(userId: string) {
 
     // 3. Fetch invoice summaries
     const { data: sumsData, error: sumsErr } = await supabase
-      .from("invoice_summaries")
+      .from("card_summaries")
       .select("*");
 
     if (sumsErr) throw sumsErr;
@@ -94,7 +94,7 @@ export async function syncLocalDataToCloud(
         invoice_due_date: t.invoiceDueDate || null
       }));
 
-      const { error } = await supabase.from("transactions").insert(txsToInsert);
+      const { error } = await supabase.from("card_transactions").insert(txsToInsert);
       if (error) throw error;
     }
 
@@ -106,7 +106,7 @@ export async function syncLocalDataToCloud(
         name
       }));
       // Use upsert or select to avoid duplicates
-      const { error } = await supabase.from("user_categories").upsert(catsToInsert, { onConflict: "user_id,name" });
+      const { error } = await supabase.from("card_categories").upsert(catsToInsert, { onConflict: "user_id,name" });
       if (error) throw error;
     }
 
@@ -127,7 +127,7 @@ export async function syncLocalDataToCloud(
         };
       });
 
-      const { error } = await supabase.from("invoice_summaries").upsert(sumsToInsert, { onConflict: "user_id,source" });
+      const { error } = await supabase.from("card_summaries").upsert(sumsToInsert, { onConflict: "user_id,source" });
       if (error) throw error;
     }
 
@@ -160,7 +160,7 @@ export async function uploadTransactionsToCloud(
         invoice_due_date: t.invoiceDueDate || null
       }));
 
-      const { error } = await supabase.from("transactions").insert(txsToInsert);
+      const { error } = await supabase.from("card_transactions").insert(txsToInsert);
       if (error) throw error;
     }
 
@@ -180,7 +180,7 @@ export async function uploadTransactionsToCloud(
         };
       });
 
-      const { error } = await supabase.from("invoice_summaries").upsert(sumsToInsert, { onConflict: "user_id,source" });
+      const { error } = await supabase.from("card_summaries").upsert(sumsToInsert, { onConflict: "user_id,source" });
       if (error) throw error;
     }
   } catch (err) {
@@ -193,7 +193,7 @@ export async function uploadTransactionsToCloud(
 export async function updateTransactionCategoryInCloud(userId: string, transactionId: string, category: string) {
   try {
     const { error } = await supabase
-      .from("transactions")
+      .from("card_transactions")
       .update({ category })
       .match({ user_id: userId, transaction_id: transactionId });
 
@@ -208,14 +208,14 @@ export async function updateTransactionCategoryInCloud(userId: string, transacti
 export async function removeSourceFromCloud(userId: string, source: string) {
   try {
     const { error: txsErr } = await supabase
-      .from("transactions")
+      .from("card_transactions")
       .delete()
       .match({ user_id: userId, source });
 
     if (txsErr) throw txsErr;
 
     const { error: sumsErr } = await supabase
-      .from("invoice_summaries")
+      .from("card_summaries")
       .delete()
       .match({ user_id: userId, source });
 
@@ -230,7 +230,7 @@ export async function removeSourceFromCloud(userId: string, source: string) {
 export async function addCategoryToCloud(userId: string, name: string) {
   try {
     const { error } = await supabase
-      .from("user_categories")
+      .from("card_categories")
       .upsert({ user_id: userId, name }, { onConflict: "user_id,name" });
 
     if (error) throw error;
@@ -245,20 +245,20 @@ export async function renameCategoryInCloud(userId: string, oldName: string, new
   try {
     // 1. Upsert new category
     const { error: catAddErr } = await supabase
-      .from("user_categories")
+      .from("card_categories")
       .upsert({ user_id: userId, name: newName }, { onConflict: "user_id,name" });
     if (catAddErr) throw catAddErr;
 
     // 2. Update matching transactions
     const { error: txsErr } = await supabase
-      .from("transactions")
+      .from("card_transactions")
       .update({ category: newName })
       .match({ user_id: userId, category: oldName });
     if (txsErr) throw txsErr;
 
     // 3. Delete old custom category entry
     const { error: catDelErr } = await supabase
-      .from("user_categories")
+      .from("card_categories")
       .delete()
       .match({ user_id: userId, name: oldName });
     if (catDelErr) throw catDelErr;
@@ -272,13 +272,13 @@ export async function renameCategoryInCloud(userId: string, oldName: string, new
 export async function clearAllCloudData(userId: string) {
   try {
     const { error: txsErr } = await supabase
-      .from("transactions")
+      .from("card_transactions")
       .delete()
       .match({ user_id: userId });
     if (txsErr) throw txsErr;
 
     const { error: sumsErr } = await supabase
-      .from("invoice_summaries")
+      .from("card_summaries")
       .delete()
       .match({ user_id: userId });
     if (sumsErr) throw sumsErr;
