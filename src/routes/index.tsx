@@ -3,7 +3,26 @@ import { useEffect, useState } from "react";
 import { extractData, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
-import { ShieldCheck, Cpu, Lock } from "lucide-react";
+import { AuthModal } from "@/components/audit/AuthModal";
+import { supabase } from "@/lib/supabase";
+import { 
+  fetchCloudData, 
+  syncLocalDataToCloud, 
+  uploadTransactionsToCloud,
+  updateTransactionCategoryInCloud,
+  removeSourceFromCloud,
+  addCategoryToCloud,
+  renameCategoryInCloud,
+  clearAllCloudData
+} from "@/lib/supabaseSync";
+import { 
+  ShieldCheck, 
+  Cpu, 
+  Lock, 
+  Cloud, 
+  LogOut, 
+  Loader2 
+} from "lucide-react";
 
 export const Route = createFileRoute("/")(
   {
@@ -46,7 +65,13 @@ function Index() {
   const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
   const [summaries, setSummaries] = useState<Record<string, InvoiceSummary>>({});
 
-  useEffect(() => {
+  // Supabase states
+  const [user, setUser] = useState<any>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);
+
+  // Load local storage if not logged in
+  function loadLocalStorageData() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -58,48 +83,164 @@ function Index() {
           return t;
         });
         setTxs(loadedTxs);
+      } else {
+        setTxs([]);
       }
-    } catch {}
+    } catch {
+      setTxs([]);
+    }
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
       if (rawCats) {
         let loaded = JSON.parse(rawCats);
-        // Migrate: rename "Mercado" to "Mercados / Panificadoras"
         loaded = loaded.map((c: string) => c === "Mercado" ? "Mercados / Panificadoras" : c);
         
-        // Migrate: add Pagamentos/Créditos if missing
         if (!loaded.includes("Pagamentos/Créditos")) {
           const idx = loaded.indexOf("Outros");
           if (idx !== -1) loaded.splice(idx, 0, "Pagamentos/Créditos");
           else loaded.push("Pagamentos/Créditos");
         }
-        // Migrate: add Ifood / Restaurantes if missing
         if (!loaded.includes("Ifood / Restaurantes")) {
           const idx = loaded.indexOf("Alimentação");
           if (idx !== -1) loaded.splice(idx, 0, "Ifood / Restaurantes");
           else loaded.unshift("Ifood / Restaurantes");
         }
         setCategoriesList(loaded);
+      } else {
+        setCategoriesList(DEFAULT_CATEGORIES);
       }
-    } catch {}
+    } catch {
+      setCategoriesList(DEFAULT_CATEGORIES);
+    }
     try {
       const rawSums = localStorage.getItem(SUMMARIES_KEY);
       if (rawSums) setSummaries(JSON.parse(rawSums));
-    } catch {}
+      else setSummaries({});
+    } catch {
+      setSummaries({});
+    }
+  }
+
+  // Load cloud data from Supabase
+  async function loadCloudData(userId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await fetchCloudData(userId);
+      setTxs(data.txs);
+      const mergedCats = Array.from(new Set([...DEFAULT_CATEGORIES, ...data.customCategories]));
+      setCategoriesList(mergedCats);
+      setSummaries(data.summaries);
+    } catch (err: any) {
+      setError("Erro ao carregar dados na nuvem: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Listen for active Supabase session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const sessionUser = session?.user ?? null;
+      setUser(sessionUser);
+      setLoadingSession(false);
+      if (sessionUser) {
+        loadCloudData(sessionUser.id);
+      } else {
+        loadLocalStorageData();
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user ?? null;
+      setUser(sessionUser);
+      if (sessionUser) {
+        loadCloudData(sessionUser.id);
+      } else {
+        loadLocalStorageData();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // Save to local storage only if NOT logged in
   useEffect(() => {
-    // Always persist (even empty array) so removals are saved to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
-  }, [txs]);
+    if (!user) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
+    }
+  }, [txs, user]);
 
   useEffect(() => {
-    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoriesList));
-  }, [categoriesList]);
+    if (!user) {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoriesList));
+    }
+  }, [categoriesList, user]);
 
   useEffect(() => {
-    localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
-  }, [summaries]);
+    if (!user) {
+      localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
+    }
+  }, [summaries, user]);
+
+  // Handle successful login/signup and merge local data
+  async function handleAuthSuccess(sessionUser: any) {
+    setUser(sessionUser);
+    
+    // Check if we have unsynced local data
+    const localRaw = localStorage.getItem(STORAGE_KEY);
+    const localTxs = localRaw ? JSON.parse(localRaw) : [];
+    
+    if (localTxs.length > 0) {
+      setBusy(true);
+      setError(null);
+      try {
+        const localCatsRaw = localStorage.getItem(CATEGORIES_KEY);
+        const localCats = localCatsRaw ? JSON.parse(localCatsRaw) : DEFAULT_CATEGORIES;
+        
+        const localSumsRaw = localStorage.getItem(SUMMARIES_KEY);
+        const localSums = localSumsRaw ? JSON.parse(localSumsRaw) : {};
+
+        // Sync local data to Supabase and merge
+        const synced = await syncLocalDataToCloud(
+          sessionUser.id,
+          localTxs,
+          localCats,
+          localSums,
+          DEFAULT_CATEGORIES
+        );
+        
+        setTxs(synced.txs);
+        const mergedCats = Array.from(new Set([...DEFAULT_CATEGORIES, ...synced.customCategories]));
+        setCategoriesList(mergedCats);
+        setSummaries(synced.summaries);
+        
+        // Success sync! Clear local cache to avoid duplicates
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(SUMMARIES_KEY);
+      } catch (err: any) {
+        setError("Erro ao sincronizar dados locais: " + err.message);
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      await loadCloudData(sessionUser.id);
+    }
+  }
+
+  // Sign out and revert to local mode
+  async function handleLogout() {
+    setBusy(true);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      loadLocalStorageData();
+    } catch (err: any) {
+      setError("Erro ao sair: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleFiles(files: File[]) {
     setBusy(true);
@@ -112,7 +253,6 @@ function Index() {
       for (const f of files) {
         const alreadyExists = txs.some((t) => t.source === f.name);
         
-        // Always extract to ensure the invoice summary is populated/updated
         const extracted = await extractData(f);
         if (extracted.summary) {
           newSummaries[f.name] = extracted.summary;
@@ -138,11 +278,17 @@ function Index() {
       }
 
       if (all.length > 0) {
-        setTxs((prev) => {
-          const existingKeys = new Set(prev.map(txKey));
-          const newUnique = all.filter((t) => !existingKeys.has(txKey(t)));
-          return [...prev, ...newUnique];
-        });
+        const existingKeys = new Set(txs.map(txKey));
+        const newUnique = all.filter((t) => !existingKeys.has(txKey(t)));
+
+        if (newUnique.length > 0) {
+          // If logged in, upload new transactions and summaries to Supabase
+          if (user) {
+            await uploadTransactionsToCloud(user.id, newUnique, newSummaries);
+          }
+
+          setTxs((prev) => [...prev, ...newUnique]);
+        }
       }
 
       if (Object.keys(newSummaries).length > 0) {
@@ -155,41 +301,84 @@ function Index() {
     }
   }
 
-  function handleClear() {
-    setTxs([]);
-    setSummaries({});
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(SUMMARIES_KEY);
+  async function handleClear() {
+    setBusy(true);
+    try {
+      if (user) {
+        await clearAllCloudData(user.id);
+      }
+      setTxs([]);
+      setSummaries({});
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SUMMARIES_KEY);
+    } catch (err: any) {
+      setError("Erro ao limpar dados na nuvem: " + err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleRemoveSource(source: string) {
-    setTxs((prev) => prev.filter((t) => t.source !== source));
-    setSummaries((prev) => {
-      const next = { ...prev };
-      delete next[source];
-      return next;
-    });
+  async function handleRemoveSource(source: string) {
+    setBusy(true);
+    try {
+      if (user) {
+        await removeSourceFromCloud(user.id, source);
+      }
+      setTxs((prev) => prev.filter((t) => t.source !== source));
+      setSummaries((prev) => {
+        const next = { ...prev };
+        delete next[source];
+        return next;
+      });
+    } catch (err: any) {
+      setError("Erro ao remover fatura da nuvem: " + err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleUpdateCategory(id: string, newCategory: string) {
-    setTxs((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
-    );
+  async function handleUpdateCategory(id: string, newCategory: string) {
+    try {
+      if (user) {
+        await updateTransactionCategoryInCloud(user.id, id, newCategory);
+      }
+      setTxs((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
+      );
+    } catch (err: any) {
+      setError("Erro ao atualizar categoria na nuvem: " + err.message);
+    }
   }
 
-  function handleAddCategory(name: string) {
+  async function handleAddCategory(name: string) {
     const trimmed = name.trim();
     if (!trimmed || categoriesList.includes(trimmed)) return;
-    setCategoriesList((prev) => [...prev, trimmed]);
+    
+    try {
+      if (user) {
+        await addCategoryToCloud(user.id, trimmed);
+      }
+      setCategoriesList((prev) => [...prev, trimmed]);
+    } catch (err: any) {
+      setError("Erro ao adicionar categoria na nuvem: " + err.message);
+    }
   }
 
-  function handleRenameCategory(oldName: string, newName: string) {
+  async function handleRenameCategory(oldName: string, newName: string) {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === oldName || categoriesList.includes(trimmed)) return;
-    setCategoriesList((prev) => prev.map((c) => (c === oldName ? trimmed : c)));
-    setTxs((prev) =>
-      prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t))
-    );
+
+    try {
+      if (user) {
+        await renameCategoryInCloud(user.id, oldName, trimmed);
+      }
+      setCategoriesList((prev) => prev.map((c) => (c === oldName ? trimmed : c)));
+      setTxs((prev) =>
+        prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t))
+      );
+    } catch (err: any) {
+      setError("Erro ao renomear categoria na nuvem: " + err.message);
+    }
   }
 
   return (
@@ -205,11 +394,51 @@ function Index() {
               Auditor<span className="text-primary">.</span>
             </span>
           </div>
+
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Lock className="size-3" />
-              Processamento local · privado
-            </div>
+            {/* Supabase Authentication & Sync Panel */}
+            {loadingSession ? (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                <span>Carregando...</span>
+              </div>
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <Cloud className="size-3.5" />
+                  <span className="hidden sm:inline">Nuvem Sincronizada</span>
+                </div>
+                <span className="hidden md:inline text-xs text-muted-foreground font-medium max-w-[150px] truncate" title={user.email}>
+                  {user.email}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1"
+                >
+                  <LogOut className="size-3" />
+                  Sair
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Lock className="size-3" />
+                  Modo Local
+                </div>
+                <button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover hover:shadow-md hover:shadow-primary/25 text-white transition-all flex items-center gap-1.5"
+                >
+                  <Cloud className="size-3.5" />
+                  Sincronizar Nuvem
+                </button>
+              </div>
+            )}
+
             {txs.length > 0 && (
               <span className="pill">
                 <span className="tabular font-mono">{txs.length}</span> lançamentos
@@ -227,9 +456,15 @@ function Index() {
               <div className="flex flex-wrap items-start justify-between gap-8">
                 <div className="max-w-2xl">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="pill-accent pill text-[11px]">
-                      <Cpu className="size-2.5" /> 100% local · zero upload
-                    </span>
+                    {user ? (
+                      <span className="pill-accent pill text-[11px] bg-emerald-500/10 border-emerald-500/25 text-emerald-400">
+                        <Cloud className="size-2.5 animate-pulse" /> Sincronização em nuvem ativa
+                      </span>
+                    ) : (
+                      <span className="pill-accent pill text-[11px]">
+                        <Cpu className="size-2.5" /> 100% local · zero upload
+                      </span>
+                    )}
                   </div>
                   <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-800 leading-[1.05] tracking-tight">
                     Auditoria inteligente{" "}
@@ -289,10 +524,17 @@ function Index() {
           <span className="font-medium">Auditor · Auditoria Privada de Cartões</span>
           <span className="flex items-center gap-1.5">
             <Lock className="size-3" />
-            Processado no navegador · sem servidor · sem cookies
+            {user ? "Salvo em nuvem com criptografia de ponta-a-ponta" : "Processado no navegador · sem servidor · sem cookies"}
           </span>
         </footer>
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }
