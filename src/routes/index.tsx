@@ -5,7 +5,7 @@ import { extractData, type RawTransaction, type InvoiceSummary } from "@/lib/pdf
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
 import { AuthModal } from "@/components/audit/AuthModal";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
   clearAllCloudData,
@@ -120,6 +120,10 @@ function Index() {
     }
 
     async function restoreSession() {
+      if (!supabaseEnabled) {
+        setCloudStatus("Modo local (Supabase não configurado)");
+        return;
+      }
       try {
         const { data } = await supabase.auth.getSession();
         const currentUser = data.session?.user ?? null;
@@ -130,6 +134,7 @@ function Index() {
         }
       } catch (err: any) {
         console.error("Erro ao verificar sessão Supabase:", err);
+        setCloudStatus("Erro de conexão");
       }
     }
 
@@ -150,6 +155,11 @@ function Index() {
   }, [summaries]);
 
   async function synchronizeCloud(userId: string) {
+    if (!supabaseEnabled) {
+      setError("Supabase não está configurado");
+      setCloudStatus("Modo local (Supabase não configurado)");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
