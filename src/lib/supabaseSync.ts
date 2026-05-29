@@ -13,6 +13,7 @@ export async function fetchCloudData(userId: string) {
     const { data: txsData, error: txsErr } = await supabase
       .from("card_transactions")
       .select("*")
+      .eq("user_id", userId)
       .order("created_at", { ascending: true });
 
     if (txsErr) throw txsErr;
@@ -34,7 +35,8 @@ export async function fetchCloudData(userId: string) {
     // 2. Fetch custom categories
     const { data: catsData, error: catsErr } = await supabase
       .from("card_categories")
-      .select("name");
+      .select("name")
+      .eq("user_id", userId);
 
     if (catsErr) throw catsErr;
     const customCategories: string[] = (catsData || []).map((c) => c.name);
@@ -42,7 +44,8 @@ export async function fetchCloudData(userId: string) {
     // 3. Fetch invoice summaries
     const { data: sumsData, error: sumsErr } = await supabase
       .from("card_summaries")
-      .select("*");
+      .select("*")
+      .eq("user_id", userId);
 
     if (sumsErr) throw sumsErr;
 
