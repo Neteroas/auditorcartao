@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseEnabled } from "@/lib/supabase";
 import { 
   Cloud, 
   Lock, 
@@ -34,6 +34,12 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
+
+    if (!supabaseEnabled) {
+      setError("Supabase não configurado. Adicione VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY válidos no arquivo .env.local.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const trimmedEmail = email.trim();
