@@ -35,7 +35,7 @@ export async function fetchCloudData(userId: string) {
     // 2. Fetch custom categories
     const { data: catsData, error: catsErr } = await supabase
       .from("card_categories")
-      .select("name");
+      .select("name")
       .eq("user_id", userId);
 
     if (catsErr) throw catsErr;
@@ -44,7 +44,7 @@ export async function fetchCloudData(userId: string) {
     // 3. Fetch invoice summaries
     const { data: sumsData, error: sumsErr } = await supabase
       .from("card_summaries")
-      .select("*");
+      .select("*")
       .eq("user_id", userId);
 
     if (sumsErr) throw sumsErr;

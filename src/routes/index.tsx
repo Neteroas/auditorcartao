@@ -1,28 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { extractData, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
+import { AuthModal } from "@/components/audit/AuthModal";
+import { supabase } from "@/lib/supabase";
+import {
+  addCategoryToCloud,
+  clearAllCloudData,
+  renameCategoryInCloud,
+  removeSourceFromCloud,
+  syncLocalDataToCloud,
+  updateTransactionCategoryInCloud,
+} from "@/lib/supabaseSync";
 import { ShieldCheck, Cpu, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/")(
   {
-  component: Index,
-  head: () => ({
-    meta: [
-      { title: "Auditor · Inteligência e Auditoria de Cartão de Crédito" },
-      { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights inteligentes." },
-    ],
-    links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
-      },
-    ],
-  }),
-});
+    component: Index,
+    head: () => ({
+      meta: [
+        { title: "Auditor · Inteligência e Auditoria de Cartão de Crédito" },
+        { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights inteligentes." },
+      ],
+      links: [
+        { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+        {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+        },
+      ],
+    }),
+  },
+);
 
 const STORAGE_KEY = "atelier-audit-txs-v1";
 const CATEGORIES_KEY = "atelier-audit-categories-v1";
@@ -39,14 +51,26 @@ function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
 }
 
+function mergeCategories(
+  defaultCategories: string[],
+  localCategories: string[],
+  cloudCategories: string[]
+) {
+  const customLocal = localCategories.filter((c) => !defaultCategories.includes(c));
+  const customCloud = cloudCategories.filter((c) => !defaultCategories.includes(c));
+  return [...defaultCategories, ...Array.from(new Set([...customLocal, ...customCloud]))];
+}
+
 function Index() {
   const [txs, setTxs] = useState<RawTransaction[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
   const [summaries, setSummaries] = useState<Record<string, InvoiceSummary>>({});
+  const [user, setUser] = useState<User | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<string>("Local");
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -63,6 +87,7 @@ function Index() {
     } catch {
       setTxs([]);
     }
+
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
       if (rawCats) {
@@ -86,12 +111,29 @@ function Index() {
     } catch {
       setCategoriesList(DEFAULT_CATEGORIES);
     }
+
     try {
       const rawSums = localStorage.getItem(SUMMARIES_KEY);
       if (rawSums) setSummaries(JSON.parse(rawSums));
     } catch {
       setSummaries({});
     }
+
+    async function restoreSession() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const currentUser = data.session?.user ?? null;
+        if (currentUser) {
+          setUser(currentUser);
+          setCloudStatus("Sincronizando com a nuvem...");
+          await synchronizeCloud(currentUser.id);
+        }
+      } catch (err: any) {
+        console.error("Erro ao verificar sessão Supabase:", err);
+      }
+    }
+
+    restoreSession();
   }, []);
 
   // Persist to localStorage
@@ -106,6 +148,29 @@ function Index() {
   useEffect(() => {
     localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
   }, [summaries]);
+
+  async function synchronizeCloud(userId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const cloud = await syncLocalDataToCloud(userId, txs, categoriesList, summaries, DEFAULT_CATEGORIES);
+      setTxs(cloud.txs);
+      setSummaries(cloud.summaries);
+      setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories));
+      setCloudStatus("Dados sincronizados com a nuvem");
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível sincronizar com a nuvem.");
+      setCloudStatus("Erro de sincronização");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleAuthSuccess(loggedUser: User) {
+    setUser(loggedUser);
+    setShowAuthModal(false);
+    synchronizeCloud(loggedUser.id);
+  }
 
   async function handleFiles(files: File[]) {
     setBusy(true);
@@ -153,6 +218,16 @@ function Index() {
       if (Object.keys(newSummaries).length > 0) {
         setSummaries((prev) => ({ ...prev, ...newSummaries }));
       }
+
+      if (user) {
+        const updatedTxs = [...txs, ...all.filter((t) => !new Set(txs.map(txKey)).has(txKey(t)))];
+        const updatedSummaries = Object.keys(newSummaries).length > 0 ? { ...summaries, ...newSummaries } : summaries;
+        const cloud = await syncLocalDataToCloud(user.id, updatedTxs, categoriesList, updatedSummaries, DEFAULT_CATEGORIES);
+        setTxs(cloud.txs);
+        setSummaries(cloud.summaries);
+        setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories));
+        setCloudStatus("Dados sincronizados com a nuvem");
+      }
     } catch (e: any) {
       setError(e?.message || "Falha ao processar PDF.");
     } finally {
@@ -165,6 +240,23 @@ function Index() {
     setSummaries({});
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SUMMARIES_KEY);
+
+    if (user) {
+      const confirmed = window.confirm("Você está conectado à nuvem. Deseja também limpar os dados na nuvem?");
+      if (confirmed) {
+        setBusy(true);
+        clearAllCloudData(user.id)
+          .then(() => {
+            setCloudStatus("Nuvem limpa");
+          })
+          .catch((err: any) => {
+            setError(err?.message || "Não foi possível limpar os dados na nuvem.");
+          })
+          .finally(() => {
+            setBusy(false);
+          });
+      }
+    }
   }
 
   function handleRemoveSource(source: string) {
@@ -174,18 +266,27 @@ function Index() {
       delete next[source];
       return next;
     });
+    if (user) {
+      removeSourceFromCloud(user.id, source).catch((err: any) => setError(err?.message || "Falha ao remover fonte na nuvem."));
+    }
   }
 
   function handleUpdateCategory(id: string, newCategory: string) {
     setTxs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
     );
+    if (user) {
+      updateTransactionCategoryInCloud(user.id, id, newCategory).catch((err: any) => setError(err?.message || "Falha ao atualizar categoria na nuvem."));
+    }
   }
 
   function handleAddCategory(name: string) {
     const trimmed = name.trim();
     if (!trimmed || categoriesList.includes(trimmed)) return;
     setCategoriesList((prev) => [...prev, trimmed]);
+    if (user) {
+      addCategoryToCloud(user.id, trimmed).catch((err: any) => setError(err?.message || "Falha ao salvar categoria na nuvem."));
+    }
   }
 
   function handleRenameCategory(oldName: string, newName: string) {
@@ -195,6 +296,16 @@ function Index() {
     setTxs((prev) =>
       prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t))
     );
+    if (user) {
+      renameCategoryInCloud(user.id, oldName, trimmed).catch((err: any) => setError(err?.message || "Falha ao renomear categoria na nuvem."));
+    }
+  }
+
+  async function handleSignOut() {
+    if (!user) return;
+    await supabase.auth.signOut();
+    setUser(null);
+    setCloudStatus("Local");
   }
 
   return (
@@ -214,13 +325,22 @@ function Index() {
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Lock className="size-3" />
-              Modo Local
+              {user ? "Modo Nuvem" : "Modo Local"}
             </div>
 
-            {txs.length > 0 && (
-              <span className="pill">
-                <span className="tabular font-mono">{txs.length}</span> lançamentos
-              </span>
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground bg-white border border-border/60 hover:border-primary/30 px-3 py-2.5 rounded-lg transition-all duration-200 shadow-sm"
+            >
+              {user ? "Desconectar" : "Sincronizar com a nuvem"}
+            </button>
+            {user && (
+              <button
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground bg-white border border-border/60 hover:border-destructive/30 px-3 py-2.5 rounded-lg transition-all duration-200 shadow-sm"
+              >
+                Sair
+              </button>
             )}
           </div>
         </div>
@@ -235,7 +355,7 @@ function Index() {
                 <div className="max-w-2xl">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="pill-accent pill text-[11px]">
-                      <Cpu className="size-2.5" /> 100% local · zero upload
+                      <Cpu className="size-2.5" /> {user ? "Dados sincronizados com a nuvem" : "100% local · zero upload"}
                     </span>
                   </div>
                   <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-800 leading-[1.05] tracking-tight">
@@ -252,6 +372,11 @@ function Index() {
             {/* Upload section */}
             <section>
               <UploadDropzone onFiles={handleFiles} busy={busy} />
+              {cloudStatus && (
+                <div className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm flex gap-3 text-primary">
+                  <span className="font-semibold">{cloudStatus}</span>
+                </div>
+              )}
               {error && (
                 <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
                   <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -267,6 +392,11 @@ function Index() {
           </>
         ) : (
           <section>
+            {cloudStatus && (
+              <div className="mb-6 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm flex gap-3 text-primary">
+                <span className="font-semibold">{cloudStatus}</span>
+              </div>
+            )}
             {error && (
               <div className="mb-8 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
                 <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -300,6 +430,8 @@ function Index() {
           </span>
         </footer>
       </div>
+
+      {showAuthModal && <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />}
     </div>
   );
 }
