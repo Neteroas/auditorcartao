@@ -102,7 +102,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
   // Visão Geral metrics
   const totalJuros = positives.filter(t => t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
-  const totalAlim  = positives.filter(t => t.category === "Alimentação" || t.category === "Mercados / Panificadoras").reduce((s, t) => s + t.amount, 0);
+  const totalAlim  = positives.filter(t => t.category === "Ifood / Restaurantes").reduce((s, t) => s + t.amount, 0);
   const totalTrans = positives.filter(t => t.category === "Transporte").reduce((s, t) => s + t.amount, 0);
 
   const monthDelta = (() => {
@@ -174,7 +174,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
           <KpiTopBorder
             label="Total alimentação"
             value={fmtBRL(totalAlim)}
-            sub="Rest. + Mercado"
+            sub="Ifood / Restaurantes"
             color="oklch(0.55 0.16 155)"
             valueColor="text-[#0f766e]"
           />
