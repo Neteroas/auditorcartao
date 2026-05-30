@@ -310,8 +310,40 @@ export async function clearAllCloudData(userId: string) {
 /** Migrate all transactions with city names (except Foz do Iguaçu) to "Compras Online" category */
 export async function fixOnlinePurchasesByCity(userId: string) {
   try {
-    // Cities regex pattern - matches Brazilian city names that indicate online purchases
-    const citiesPattern = /são\s+paulo|rio\s+de\s+janeiro|belo\s+horizonte|brasília|brasilia|curitiba|porto\s+alegre|salvador|fortaleza|recife|manaus|goiânia|goiania|campinas|santos|sorocaba|guarulhos|osasco|diadema|mogi\s+cruzes|atibaia|ribeirão\s+preto|ribeirao\s+preto|matão|araraquara|piracicaba|presidente\s+prudente|araçatuba|aracatuba|bauru|jundiaí|jundiai|franca|botucatu|jaú|blumenau|itajaí|itajai|joinville|florianópolis|florianopolis|chapecó|chapeco|santa\s+maria|caxias\s+do\s+sul|viçosa|vicosa|campina\s+grande|joão\s+pessoa|joao\s+pessoa|aracaju|maceió|maceio|teresina|natal|parnamirim|petrolina|juazeiro|feira\s+de\s+santana|ilhéus|ilheus|belém|belem|santarém|santarem|marabá|maraba|castanhal|ananindeua|parauapebas|novo\s+repartimento|altamira|tucuruí|tucurui|macapá|macapa|boa\s+vista|itabuna|jequié|jequie|teixeira\s+de\s+freitas|vitória\s+da\s+conquista|victoria\s+da\s+conquista|pouso\s+alegre|uberaba|divinópolis|divinopolis|contagem|betim|sete\s+lagoas|ipatinga|governador\s+valadares|montes\s+claros|ituiutaba|muriaé|barbacena|lafaiete|conselheiro\s+lafaiete|ouro\s+preto|mariana|congonhas|itabira|três\s+corações|tres\s+coracoes|varginha|juiz\s+de\s+fora|unaí|unai|patos\s+de\s+minas|araguari|uberlândia|uberlandia|itumbiara|catalão|catalao|jataí|jatai|rio\s+verde|morrinhos|anápolis|anapolis|aparecida\s+de\s+goiânia|aparecida\s+de\s+goiania|luziânia|luziania|formosa|cristalina|cidade\s+ocidental|planaltina|águas\s+lindas\s+de\s+goiás|aguas\s+lindas\s+de\s+goias|gama|taguatinga|ceilândia|ceilandia|samambaia|riacho\s+fundo|sobradinho|guará|guara|núcleo\s+bandeirante|nucleo\s+bandeirante|recanto\s+das\s+emas|águas\s+claras|aguas\s+claras|são\s+sebastião|sao\s+sebastiao|paranoá|paranoa|itapoã|itapoa|são\s+gonçalo|sao\s+goncalo|duque\s+de\s+caxias|niterói|niteroi|são\s+joão\s+de\s+meriti|sao\s+joao\s+de\s+meriti|nova\s+iguaçu|nova\s+iguazu|mesquita|nilópolis|nilopolis|maricá|marica|são\s+pedro\s+da\s+aldeia|sao\s+pedro\s+da\s+aldeia|araruama|cabo\s+frio|búzios|buzios|iguaba\s+grande|casimiro\s+de\s+abreu|rio\s+das\s+flores|silva\s+jardim|carmo|conceição\s+de\s+macabu|conceicao\s+de\s+macabu|macaé|macae|campos\s+dos\s+goitacazes|quissamã|quissama|carapebus|cardoso\s+moreira|italva|itaperuna|bom\s+jesus\s+do\s+itabapoana|natividade|miracema|porciúncula|porciunciula|santo\s+antônio\s+de\s+pádua|santo\s+antonio\s+de\s+padua|varre\s+-\s+sai|são\s+fidélis|sao\s+fidelis|são\s+josé\s+do\s+calçado|sao\s+jose\s+do\s+calcado|barra\s+de\s+são\s+francisco|barra\s+de\s+sao\s+francisco/i;
+    // Normalize text by removing accents
+    function normalizeText(text: string): string {
+      return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase();
+    }
+
+    const BRAZILIAN_CITIES = [
+      "sao paulo", "rio de janeiro", "belo horizonte", "brasilia", "curitiba", "porto alegre",
+      "salvador", "fortaleza", "recife", "manaus", "goiania", "campinas", "santos", "sorocaba",
+      "guarulhos", "osasco", "diadema", "mogi cruzes", "atibaia", "ribeirao preto", "matao",
+      "araraquara", "piracicaba", "presidente prudente", "aracatuba", "bauru", "jundiai", "franca",
+      "botucatu", "jau", "blumenau", "itajai", "joinville", "florianopolis", "chapeco", "santa maria",
+      "caxias do sul", "vicosa", "campina grande", "joao pessoa", "aracaju", "maceio", "teresina",
+      "natal", "parnamirim", "petrolina", "juazeiro", "feira de santana", "ilheus", "belem",
+      "santarem", "maraba", "castanhal", "ananindeua", "parauapebas", "novo repartimento", "altamira",
+      "tucurui", "macapa", "boa vista", "itabuna", "jequie", "teixeira de freitas", "victoria da conquista",
+      "pouso alegre", "uberaba", "divinopolis", "contagem", "betim", "sete lagoas", "ipatinga",
+      "governador valadares", "montes claros", "ituiutaba", "muriae", "barbacena", "ouro preto",
+      "mariana", "congonhas", "itabira", "tres coracoes", "varginha", "juiz de fora", "unai",
+      "patos de minas", "araguari", "uberlandia", "itumbiara", "catalao", "jatai", "rio verde",
+      "morrinhos", "anapolis", "aparecida de goiania", "luziania", "formosa", "cristalina",
+      "cidade ocidental", "planaltina", "aguas lindas de goias", "gama", "taguatinga", "ceilandia",
+      "samambaia", "riacho fundo", "sobradinho", "guara", "nucleo bandeirante", "recanto das emas",
+      "aguas claras", "sao sebastiao", "paranoa", "itapoa", "sao goncalo", "duque de caxias",
+      "niteroi", "sao joao de meriti", "nova iguazu", "mesquita", "nilopolis", "marica",
+      "sao pedro da aldeia", "araruama", "cabo frio", "buzios", "iguaba grande", "casimiro de abreu",
+      "rio das flores", "silva jardim", "carmo", "conceicao de macabu", "macae", "campos dos goitacazes",
+      "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna", "bom jesus do itabapoana",
+      "natividade", "miracema", "porciunciula", "santo antonio de padua", "sao fidelis",
+      "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus",
+      "indaiatuba", "cajamar", "uniao da vitoria", "sao jose",
+    ];
 
     // Fetch all transactions for this user
     const { data: txsData, error: fetchErr } = await supabase
@@ -323,9 +355,17 @@ export async function fixOnlinePurchasesByCity(userId: string) {
 
     // Filter transactions that mention a city (but not Foz do Iguaçu)
     const txsToUpdate = (txsData || []).filter((t) => {
-      const isFozDoIguacu = /foz\s+do\s+iguac/i.test(t.description);
-      const hasCity = citiesPattern.test(t.description);
-      return hasCity && !isFozDoIguacu && t.category !== "Compras Online";
+      const normalized = normalizeText(t.description);
+      const isFozDoIguacu = normalized.includes("FOZ") && normalized.includes("IGUAC");
+
+      if (isFozDoIguacu || t.category === "Compras Online") return false;
+
+      for (const city of BRAZILIAN_CITIES) {
+        if (normalized.includes(normalizeText(city))) {
+          return true;
+        }
+      }
+      return false;
     });
 
     if (txsToUpdate.length === 0) return { updated: 0 };

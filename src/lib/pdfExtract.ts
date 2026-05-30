@@ -34,8 +34,8 @@ const CATEGORIES: { name: string; keywords: RegExp }[] = [
   { name: "Ifood / Restaurantes", keywords: /\bifd\s*\*|ifood|uber\s?eats|rappi|deliverydireto|delivery/i },
   // Alimentação: restaurantes, lanchonetes, padarias — mas NÃO delivery
   { name: "Alimentação", keywords: /restaurant|padaria|lanchonete|burger|pizzar|cafe|café|mc\s?donald|\bbk\b|subway|outback/i },
-  // Compras Online: plataformas + cidades brasileiras (mas não Foz do Iguaçu)
-  { name: "Compras Online", keywords: /^(?!.*\bfoz\b\s+do\b\s+iguac)(amazon|mercado\s?livre|mercadoliv|ec\s*\*\s*mercadoli|mp\s*\*\s*mercadoliv|\bmp\s*\*|shopee|magalu|magazine|aliexpress|americanas|submarino|shein|são\s+paulo|rio\s+de\s+janeiro|belo\s+horizonte|brasília|brasilia|curitiba|porto\s+alegre|salvador|fortaleza|recife|manaus|goiânia|goiania|campinas|santos|sorocaba|guarulhos|osasco|diadema|mogi\s+cruzes|atibaia|ribeirão\s+preto|ribeirao\s+preto|matão|araraquara|piracicaba|presidente\s+prudente|araçatuba|aracatuba|bauru|jundiaí|jundiai|franca|botucatu|jaú|blumenau|itajaí|itajai|joinville|florianópolis|florianopolis|chapecó|chapeco|santa\s+maria|caxias\s+do\s+sul|viçosa|vicosa|campina\s+grande|joão\s+pessoa|joao\s+pessoa|aracaju|maceió|maceio|teresina|natal|parnamirim|petrolina|juazeiro|feira\s+de\s+santana|ilhéus|ilheus|belém|belem|santarém|santarem|marabá|maraba|castanhal|ananindeua|parauapebas|novo\s+repartimento|altamira|tucuruí|tucurui|macapá|macapa|boa\s+vista|manaus|itabuna|jequié|jequie|teixeira\s+de\s+freitas|vitória\s+da\s+conquista|victoria\s+da\s+conquista|pouso\s+alegre|uberaba|divinópolis|divinopolis|contagem|betim|sete\s+lagoas|ipatinga|governador\s+valadares|montes\s+claros|ituiutaba|muriaé|barbacena|lafaiete|conselheiro\s+lafaiete|ouro\s+preto|mariana|congonhas|itabira|três\s+corações|tres\s+coracoes|varginha|juiz\s+de\s+fora|unaí|unai|patos\s+de\s+minas|araguari|uberlândia|uberlandia|ituiutaba|itumbiara|catalão|catalao|jataí|jatai|rio\s+verde|morrinhos|goiânia|anápolis|anapolis|aparecida\s+de\s+goiânia|aparecida\s+de\s+goiania|luziânia|luziania|formosa|cristalina|cidade\s+ocidental|planaltina|águas\s+lindas\s+de\s+goiás|aguas\s+lindas\s+de\s+goias|brasília|brasilia|gama|taguatinga|ceilândia|ceilandia|samambaia|riacho\s+fundo|sobradinho|guará|guara|núcleo\s+bandeirante|nucleo\s+bandeirante|recanto\s+das\s+emas|águas\s+claras|aguas\s+claras|santa\s+maria|são\s+sebastião|sao\s+sebastiao|paranoá|paranoa|planaltina|itapoã|itapoa|são\s+gonçalo|sao\s+goncalo|duque\s+de\s+caxias|niterói|niteroi|são\s+joão\s+de\s+meriti|sao\s+joao\s+de\s+meriti|nova\s+iguaçu|nova\s+iguazu|mesquita|nilópolis|nilopolis|maricá|marica|são\s+pedro\s+da\s+aldeia|sao\s+pedro\s+da\s+aldeia|araruama|cabo\s+frio|búzios|buzios|iguaba\s+grande|casimiro\s+de\s+abreu|maricá|marica|rio\s+das\s+flores|silva\s+jardim|carmo|conceição\s+de\s+macabu|conceicao\s+de\s+macabu|macaé|macae|campos\s+dos\s+goitacazes|conceição\s+de\s+macabu|conceicao\s+de\s+macabu|quissamã|quissama|carapebus|cardoso\s+moreira|italva|itaperuna|bom\s+jesus\s+do\s+itabapoana|natividade|miracema|porciúncula|porciunciula|santo\s+antônio\s+de\s+pádua|santo\s+antonio\s+de\s+padua|varre\s+-\s+sai|são\s+fidélis|sao\s+fidelis|são\s+josé\s+do\s+calçado|sao\s+jose\s+do\s+calcado|barra\s+de\s+são\s+francisco|barra\s+de\s+sao\s+francisco)/i },
+  // Compras Online: plataformas de e-commerce (cidades detectadas via normalizeText)
+  { name: "Compras Online", keywords: /amazon|mercado\s?livre|mercadoliv|ec\s*\*\s*mercadoli|mp\s*\*\s*mercadoliv|\bmp\s*\*|shopee|magalu|magazine|aliexpress|americanas|submarino|shein/i },
   // Mercado: apenas supermercados reais (sem "mercado" genérico para evitar falsos positivos)
   { name: "Mercados / Panificadoras", keywords: /supermerc|carrefour|\bextra\b|pao\s?de\s?acucar|assai|atacad|hortifr|sams\s?club|prezunic|mundial|gbarbosa|bistek|hipermercado|mercado\s+do\s+polaco|panificadora|kipao/i },
   { name: "Transporte", keywords: /\buber\b(?!\s?eats)|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina/i },
@@ -52,9 +52,57 @@ const CATEGORIES: { name: string; keywords: RegExp }[] = [
 ];
 
 
+function normalizeText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+const BRAZILIAN_CITIES = [
+  "sao paulo", "rio de janeiro", "belo horizonte", "brasilia", "curitiba", "porto alegre",
+  "salvador", "fortaleza", "recife", "manaus", "goiania", "campinas", "santos", "sorocaba",
+  "guarulhos", "osasco", "diadema", "mogi cruzes", "atibaia", "ribeirao preto", "matao",
+  "araraquara", "piracicaba", "presidente prudente", "aracatuba", "bauru", "jundiai", "franca",
+  "botucatu", "jau", "blumenau", "itajai", "joinville", "florianopolis", "chapeco", "santa maria",
+  "caxias do sul", "vicosa", "campina grande", "joao pessoa", "aracaju", "maceio", "teresina",
+  "natal", "parnamirim", "petrolina", "juazeiro", "feira de santana", "ilheus", "belem",
+  "santarem", "maraba", "castanhal", "ananindeua", "parauapebas", "novo repartimento", "altamira",
+  "tucurui", "macapa", "boa vista", "itabuna", "jequie", "teixeira de freitas", "victoria da conquista",
+  "pouso alegre", "uberaba", "divinopolis", "contagem", "betim", "sete lagoas", "ipatinga",
+  "governador valadares", "montes claros", "ituiutaba", "muriae", "barbacena", "ouro preto",
+  "mariana", "congonhas", "itabira", "tres coracoes", "varginha", "juiz de fora", "unaí",
+  "patos de minas", "araguari", "uberlandia", "itumbiara", "catalao", "jatai", "rio verde",
+  "morrinhos", "anapolis", "aparecida de goiania", "luziania", "formosa", "cristalina",
+  "cidade ocidental", "planaltina", "aguas lindas de goias", "gama", "taguatinga", "ceilandia",
+  "samambaia", "riacho fundo", "sobradinho", "guara", "nucleo bandeirante", "recanto das emas",
+  "aguas claras", "sao sebastiao", "paranoa", "itapoa", "sao goncalo", "duque de caxias",
+  "niteroi", "sao joao de meriti", "nova iguazu", "mesquita", "nilopolis", "marica",
+  "sao pedro da aldeia", "araruama", "cabo frio", "buzios", "iguaba grande", "casimiro de abreu",
+  "rio das flores", "silva jardim", "carmo", "conceicao de macabu", "macae", "campos dos goitacazes",
+  "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna", "bom jesus do itabapoana",
+  "natividade", "miracema", "porciunciula", "santo antonio de padua", "sao fidelis",
+  "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus", "coracaozinho",
+  "indaiatuba", "cajamar", "uniao da vitoria", "sao jose",
+];
+
 export function categorize(desc: string, amount?: number): string {
   // Negative amounts are always payments/credits
   if (amount !== undefined && amount < 0) return "Pagamentos/Créditos";
+
+  // Check if it's a city (but exclude Foz do Iguaçu)
+  const normalized = normalizeText(desc);
+  const isFozDoIguacu = normalized.includes("FOZ") && normalized.includes("IGUAC");
+
+  if (!isFozDoIguacu) {
+    for (const city of BRAZILIAN_CITIES) {
+      if (normalized.includes(normalizeText(city))) {
+        return "Compras Online";
+      }
+    }
+  }
+
+  // Check standard categories
   for (const c of CATEGORIES) if (c.keywords.test(desc)) return c.name;
   return "Outros";
 }
