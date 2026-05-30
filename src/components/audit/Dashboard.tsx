@@ -412,9 +412,8 @@ function Panorama({ months, categories, txs }: {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <h3 className={`font-display text-2xl font-800 uppercase tracking-wide ${theme.title}`}>
-                        {monthName}
+                        {monthName} {yearShort}
                       </h3>
-                      <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest mt-0.5">{yearShort}</p>
                     </div>
                     {isMax ? (
                       <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border border-amber-200">
