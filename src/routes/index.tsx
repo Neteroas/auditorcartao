@@ -10,6 +10,7 @@ import {
   addCategoryToCloud,
   clearAllCloudData,
   fixHistoricLojasClaroFozCategory,
+  fixOnlinePurchasesByCity,
   renameCategoryInCloud,
   removeSourceFromCloud,
   syncLocalDataToCloud,
@@ -179,6 +180,7 @@ function Index() {
     setError(null);
     try {
       await fixHistoricLojasClaroFozCategory(userId);
+      await fixOnlinePurchasesByCity(userId);
       const cloud = await syncLocalDataToCloud(userId, txs, categoriesList, summaries, DEFAULT_CATEGORIES);
       const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);
       setTxs(normalizedTxs);
