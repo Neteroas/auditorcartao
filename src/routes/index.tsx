@@ -42,7 +42,7 @@ const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
   "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
-  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Tarifas",
+  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Telefonia (Planos/Aparelhos)", "Tarifas",
   "Pagamentos/Créditos", "Outros"
 ];
 

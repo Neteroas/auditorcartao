@@ -336,6 +336,7 @@ const getCatIcon = (cat: string) => {
     case "Lazer": return <Ticket className="size-3.5" />;
     case "Educação": return <GraduationCap className="size-3.5" />;
     case "Serviços": return <Zap className="size-3.5" />;
+    case "Telefonia (Planos/Aparelhos)": return <Smartphone className="size-3.5" />;
     case "Vestuário": return <Briefcase className="size-3.5" />;
     case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
     case "Pagamentos/Créditos": return <CheckCircle2 className="size-3.5 text-emerald-600" />;
