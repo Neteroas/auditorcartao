@@ -9,6 +9,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
   clearAllCloudData,
+  fixHistoricLojasClaroFozCategory,
   renameCategoryInCloud,
   removeSourceFromCloud,
   syncLocalDataToCloud,
@@ -46,6 +47,16 @@ export const DEFAULT_CATEGORIES = [
   "Pagamentos/Créditos", "Outros"
 ];
 
+const LOJAS_CLARO_FOZ_PATTERN = /lojasc?larofoz.*foz\s+do\s+iguac|foz\s+do\s+iguac.*lojasc?larofoz/i;
+const TELEFONIA_CATEGORY = "Telefonia (Planos/Aparelhos)";
+
+function normalizeHistoricTransactionCategory(t: RawTransaction): RawTransaction {
+  if (t.category === "Vestuário" && LOJAS_CLARO_FOZ_PATTERN.test(t.description)) {
+    return { ...t, category: TELEFONIA_CATEGORY };
+  }
+  return t;
+}
+
 /** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
 function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
@@ -77,10 +88,14 @@ function Index() {
       if (raw) {
         let loadedTxs = JSON.parse(raw);
         loadedTxs = loadedTxs.map((t: any) => {
-          if (t.category === "Mercado") {
-            return { ...t, category: "Mercados / Panificadoras" };
+          let tx = t;
+          if (tx.category === "Mercado") {
+            tx = { ...tx, category: "Mercados / Panificadoras" };
           }
-          return t;
+          if (tx.category === "Vestuário" && LOJAS_CLARO_FOZ_PATTERN.test(tx.description)) {
+            tx = { ...tx, category: TELEFONIA_CATEGORY };
+          }
+          return tx;
         });
         setTxs(loadedTxs);
       }
@@ -163,8 +178,10 @@ function Index() {
     setBusy(true);
     setError(null);
     try {
+      await fixHistoricLojasClaroFozCategory(userId);
       const cloud = await syncLocalDataToCloud(userId, txs, categoriesList, summaries, DEFAULT_CATEGORIES);
-      setTxs(cloud.txs);
+      const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);
+      setTxs(normalizedTxs);
       setSummaries(cloud.summaries);
       setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories));
       setCloudStatus("Dados sincronizados com a nuvem");

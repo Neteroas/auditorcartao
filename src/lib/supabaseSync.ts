@@ -192,6 +192,22 @@ export async function uploadTransactionsToCloud(
   }
 }
 
+/** Bulk-fix historic LojasClaroFoz records in Supabase */
+export async function fixHistoricLojasClaroFozCategory(userId: string) {
+  try {
+    const { error } = await supabase
+      .from("card_transactions")
+      .update({ category: "Telefonia (Planos/Aparelhos)" })
+      .match({ user_id: userId, category: "Vestuário" })
+      .ilike("description", "%lojasc%larofoz%foz%iguac%");
+
+    if (error) throw error;
+  } catch (err) {
+    console.error("Error fixing historic LojasClaroFoz categories:", err);
+    throw err;
+  }
+}
+
 /** Update the category of a transaction in Supabase */
 export async function updateTransactionCategoryInCloud(userId: string, transactionId: string, category: string) {
   try {
