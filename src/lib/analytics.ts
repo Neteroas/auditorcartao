@@ -106,6 +106,9 @@ export interface FutureInstallment {
 
 export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallment[] {
   const map = new Map<string, FutureInstallment>();
+  const now = new Date();
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
   for (const t of txs) {
     if (!t.installment) continue;
     const { current, total } = t.installment;
@@ -115,6 +118,7 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (key <= currentYearMonth) continue;
       if (!map.has(key)) {
         map.set(key, {
           month: key,
@@ -213,10 +217,8 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
   // Installments load
   const installments = positives.filter((t) => t.installment);
   if (installments.length) {
-    const totalRemaining = installments.reduce(
-      (s, t) => s + t.amount * (t.installment!.total - t.installment!.current),
-      0,
-    );
+    const futureInstallments = projectFutureInstallments(positives);
+    const totalRemaining = futureInstallments.reduce((s, f) => s + f.total, 0);
     insights.push({
       kind: "info",
       title: `${installments.length} compras parceladas em aberto`,
