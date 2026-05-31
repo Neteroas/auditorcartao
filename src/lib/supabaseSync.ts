@@ -310,15 +310,7 @@ export async function clearAllCloudData(userId: string) {
 /** Migrate all transactions with city names (except Foz do Iguaçu) to "Compras Online" category */
 export async function fixOnlinePurchasesByCity(userId: string) {
   try {
-    // Normalize text by removing accents
-    function normalizeText(text: string): string {
-      return text
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toUpperCase();
-    }
-
-    const BRAZILIAN_CITIES = [
+    const CITY_PATTERNS = [
       "sao paulo", "rio de janeiro", "belo horizonte", "brasilia", "curitiba", "porto alegre",
       "salvador", "fortaleza", "recife", "manaus", "goiania", "campinas", "santos", "sorocaba",
       "guarulhos", "osasco", "diadema", "mogi cruzes", "atibaia", "ribeirao preto", "matao",
@@ -333,53 +325,66 @@ export async function fixOnlinePurchasesByCity(userId: string) {
       "mariana", "congonhas", "itabira", "tres coracoes", "varginha", "juiz de fora", "unai",
       "patos de minas", "araguari", "uberlandia", "itumbiara", "catalao", "jatai", "rio verde",
       "morrinhos", "anapolis", "aparecida de goiania", "luziania", "formosa", "cristalina",
-      "cidade ocidental", "planaltina", "aguas lindas de goias", "gama", "taguatinga", "ceilandia",
-      "samambaia", "riacho fundo", "sobradinho", "guara", "nucleo bandeirante", "recanto das emas",
+      "cidade ocidental", "planaltina", "aguas lindas", "gama", "taguatinga", "ceilandia",
+      "samambaia", "riacho fundo", "sobradinho", "guara", "nucleos", "recanto",
       "aguas claras", "sao sebastiao", "paranoa", "itapoa", "sao goncalo", "duque de caxias",
-      "niteroi", "sao joao de meriti", "nova iguazu", "mesquita", "nilopolis", "marica",
-      "sao pedro da aldeia", "araruama", "cabo frio", "buzios", "iguaba grande", "casimiro de abreu",
-      "rio das flores", "silva jardim", "carmo", "conceicao de macabu", "macae", "campos dos goitacazes",
-      "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna", "bom jesus do itabapoana",
-      "natividade", "miracema", "porciunciula", "santo antonio de padua", "sao fidelis",
-      "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus",
-      "indaiatuba", "cajamar", "uniao da vitoria", "sao jose",
+      "niteroi", "sao joao", "nova iguazu", "mesquita", "nilopolis", "marica",
+      "sao pedro", "araruama", "cabo frio", "buzios", "iguaba", "casimiro",
+      "rio das flores", "silva jardim", "carmo", "conceicao", "macae", "campos dos",
+      "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna",
+      "natividade", "miracema", "porciunciula", "santo antonio", "sao fidelis",
+      "sao jose", "barra de sao", "coracaozinho", "coracao de jesus", "coracao de j",
+      "indaiatuba", "cajamar", "uniao da vitoria", "unio da vitr",
     ];
 
-    // Fetch all transactions for this user
+    // Fetch all transactions for this user that need migration
     const { data: txsData, error: fetchErr } = await supabase
       .from("card_transactions")
-      .select("*")
-      .eq("user_id", userId);
+      .select("id, description, category")
+      .eq("user_id", userId)
+      .neq("category", "Compras Online");
 
     if (fetchErr) throw fetchErr;
 
-    // Filter transactions that mention a city (but not Foz do Iguaçu)
-    const txsToUpdate = (txsData || []).filter((t) => {
-      const normalized = normalizeText(t.description);
-      const isFozDoIguacu = normalized.includes("FOZ") && normalized.includes("IGUAC");
+    if (!txsData || txsData.length === 0) return { updated: 0 };
 
-      if (isFozDoIguacu || t.category === "Compras Online") return false;
+    let updateCount = 0;
 
-      for (const city of BRAZILIAN_CITIES) {
-        if (normalized.includes(normalizeText(city))) {
-          return true;
+    // Process each transaction
+    for (const tx of txsData) {
+      const desc = tx.description.toLowerCase();
+
+      // Skip if Foz do Iguaçu
+      if (desc.includes("foz") && desc.includes("iguac")) {
+        continue;
+      }
+
+      // Check if any city pattern matches
+      let found = false;
+      for (const city of CITY_PATTERNS) {
+        if (desc.includes(city)) {
+          found = true;
+          break;
         }
       }
-      return false;
-    });
 
-    if (txsToUpdate.length === 0) return { updated: 0 };
+      if (found) {
+        const { error: updateErr } = await supabase
+          .from("card_transactions")
+          .update({ category: "Compras Online" })
+          .eq("id", tx.id)
+          .eq("user_id", userId);
 
-    // Update all matching transactions to "Compras Online"
-    for (const tx of txsToUpdate) {
-      const { error } = await supabase
-        .from("card_transactions")
-        .update({ category: "Compras Online" })
-        .eq("id", tx.id);
-      if (error) throw error;
+        if (updateErr) {
+          console.error(`Error updating transaction ${tx.id}:`, updateErr);
+        } else {
+          updateCount++;
+        }
+      }
     }
 
-    return { updated: txsToUpdate.length };
+    console.log(`Migrated ${updateCount} transactions to "Compras Online"`);
+    return { updated: updateCount };
   } catch (err) {
     console.error("Error fixing online purchases by city:", err);
     throw err;
