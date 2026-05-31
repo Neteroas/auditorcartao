@@ -335,6 +335,8 @@ export async function fixOnlinePurchasesByCity(userId: string) {
       "natividade", "miracema", "porciunciula", "santo antonio", "sao fidelis",
       "sao jose", "barra de sao", "coracaozinho", "coracao de jesus", "coracao de j",
       "indaiatuba", "cajamar", "uniao da vitoria", "unio da vitr",
+      // Additional patterns
+      "sao sebastiao", "sao joao", "sao goncalo", "sao pedro",
     ];
 
     // Fetch all transactions for this user that need migration
@@ -365,6 +367,15 @@ export async function fixOnlinePurchasesByCity(userId: string) {
         if (desc.includes(city)) {
           found = true;
           break;
+        }
+      }
+
+      // Additional pattern: detect city-like patterns (e.g., "CORACAO DE J BR", "UNIO DA VITR BR")
+      // These are typically city names in abbreviated form
+      if (!found) {
+        const cityLikePattern = /\b[a-z]{3,}\s+(?:de\s+)?[a-z]{1,2}\b.*br\b/;
+        if (cityLikePattern.test(desc)) {
+          found = true;
         }
       }
 

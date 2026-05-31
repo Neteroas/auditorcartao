@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { extractData, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
+import { extractData, categorize, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
 import { AuthModal } from "@/components/audit/AuthModal";
@@ -58,6 +58,18 @@ function normalizeHistoricTransactionCategory(t: RawTransaction): RawTransaction
   return t;
 }
 
+/** Fix transaction categories using the updated categorization logic */
+function fixLocalTransactionCategories(txs: RawTransaction[]): RawTransaction[] {
+  return txs.map((t) => {
+    const recalculatedCategory = categorize(t.description, t.amount);
+    // Only update if the recalculated category differs from current
+    if (t.category !== recalculatedCategory) {
+      return { ...t, category: recalculatedCategory };
+    }
+    return t;
+  });
+}
+
 /** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
 function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
@@ -98,6 +110,8 @@ function Index() {
           }
           return tx;
         });
+        // Apply the new categorization logic to fix categories
+        loadedTxs = fixLocalTransactionCategories(loadedTxs);
         setTxs(loadedTxs);
       }
     } catch {

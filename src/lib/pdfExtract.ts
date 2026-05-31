@@ -82,8 +82,10 @@ const BRAZILIAN_CITIES = [
   "rio das flores", "silva jardim", "carmo", "conceicao de macabu", "macae", "campos dos goitacazes",
   "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna", "bom jesus do itabapoana",
   "natividade", "miracema", "porciunciula", "santo antonio de padua", "sao fidelis",
-  "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus", "coracaozinho",
-  "indaiatuba", "cajamar", "uniao da vitoria", "sao jose",
+  "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus", "coracao de j",
+  "indaiatuba", "cajamar", "uniao da vitoria", "sao jose", "unio da vitr",
+  // Additional city patterns and abbreviations
+  "sao sebastiao", "sao joao", "sao goncalo", "sao pedro", "sao paulo", "sao fidelis",
 ];
 
 export function categorize(desc: string, amount?: number): string {
@@ -96,7 +98,19 @@ export function categorize(desc: string, amount?: number): string {
 
   if (!isFozDoIguacu) {
     for (const city of BRAZILIAN_CITIES) {
-      if (normalized.includes(normalizeText(city))) {
+      const normalizedCity = normalizeText(city);
+      if (normalized.includes(normalizedCity)) {
+        return "Compras Online";
+      }
+    }
+    
+    // Additional pattern: detect city-like patterns (e.g., "CORACAO DE J BR", "UNIO DA VITR BR")
+    // These are typically city names in abbreviated form like "CORACAO DE JESUS" -> "CORACAO DE J"
+    const cityPatterns = [
+      /\b[A-Z]{3,}\s+(?:DE\s+)?[A-Z]{1,2}\b.*BR\b/, // City-like pattern with BR suffix
+    ];
+    for (const pattern of cityPatterns) {
+      if (pattern.test(desc)) {
         return "Compras Online";
       }
     }
