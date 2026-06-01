@@ -9,8 +9,7 @@ import {
   LogIn, 
   AlertCircle, 
   X, 
-  CheckCircle2, 
-  UserPlus 
+  CheckCircle2
 } from "lucide-react";
 
 interface AuthModalProps {
@@ -21,10 +20,10 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState(false);
 
   if (!isOpen) return null;
 
@@ -35,34 +34,32 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     setLoading(true);
 
     if (!supabaseEnabled) {
-      setError("Supabase não configurado. Adicione VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY válidos no arquivo .env.local.");
+      setError("Supabase não configurado.");
       setLoading(false);
       return;
     }
 
     try {
-      const trimmedEmail = email.trim();
-      if (!trimmedEmail) throw new Error("Por favor, digite seu e-mail.");
+      if (!email.trim()) throw new Error("Digite seu e-mail.");
+      if (!password) throw new Error("Digite sua senha.");
 
-      // Enviar Magic Link por email
-      const { error: authErr } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          emailRedirectTo: window.location.origin === 'http://localhost:3000' 
-            ? 'https://auditorcartao.lovable.app' 
-            : window.location.origin,
-        }
+      // Login com email e senha
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
       });
 
       if (authErr) throw authErr;
-
-      setEmailSent(true);
-      setSuccessMsg("Link de acesso enviado! Verifique seu e-mail.");
-      setTimeout(() => {
-        onClose();
-      }, 3000);
+      
+      if (data?.user) {
+        setSuccessMsg("Logado com sucesso!");
+        setTimeout(() => {
+          onSuccess(data.user);
+          onClose();
+        }, 1000);
+      }
     } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro inesperado.");
+      setError(err?.message || "Erro ao entrar.");
     } finally {
       setLoading(false);
     }
@@ -100,8 +97,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           </p>
         </div>
 
-        {/* Tab Selector - REMOVIDO, usar magic link direto */}
-
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           
@@ -118,7 +113,26 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
                 required
-                disabled={emailSent}
+                disabled={loading}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm font-medium transition-all disabled:opacity-50"
+              />
+            </div>
+          </div>
+
+          {/* Password field */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Senha
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 size-4.5 text-muted-foreground/60" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Sua senha"
+                required
+                disabled={loading}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm font-medium transition-all disabled:opacity-50"
               />
             </div>
@@ -142,20 +156,18 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           {/* Submit button */}
           <button
             type="submit"
-            disabled={loading || emailSent}
+            disabled={loading}
             className="w-full bg-primary hover:bg-primary-hover active:scale-[0.98] text-white font-semibold py-3 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 text-sm transition-all hover:shadow-primary/45 disabled:opacity-50 disabled:pointer-events-none"
           >
             {loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : emailSent ? (
               <>
-                <CheckCircle2 className="size-4" />
-                Link enviado!
+                <Loader2 className="size-4 animate-spin" />
+                Entrando...
               </>
             ) : (
               <>
-                <Mail className="size-4" />
-                Enviar Link de Acesso
+                <LogIn className="size-4" />
+                Entrar na Nuvem
               </>
             )}
           </button>
