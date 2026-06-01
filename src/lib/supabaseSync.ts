@@ -325,18 +325,16 @@ export async function fixOnlinePurchasesByCity(userId: string) {
       "mariana", "congonhas", "itabira", "tres coracoes", "varginha", "juiz de fora", "unai",
       "patos de minas", "araguari", "uberlandia", "itumbiara", "catalao", "jatai", "rio verde",
       "morrinhos", "anapolis", "aparecida de goiania", "luziania", "formosa", "cristalina",
-      "cidade ocidental", "planaltina", "aguas lindas", "gama", "taguatinga", "ceilandia",
-      "samambaia", "riacho fundo", "sobradinho", "guara", "nucleos", "recanto",
+      "cidade ocidental", "planaltina", "aguas lindas de goias", "gama", "taguatinga", "ceilandia",
+      "samambaia", "riacho fundo", "sobradinho", "guara", "nucleo bandeirante", "recanto das emas",
       "aguas claras", "sao sebastiao", "paranoa", "itapoa", "sao goncalo", "duque de caxias",
-      "niteroi", "sao joao", "nova iguazu", "mesquita", "nilopolis", "marica",
-      "sao pedro", "araruama", "cabo frio", "buzios", "iguaba", "casimiro",
-      "rio das flores", "silva jardim", "carmo", "conceicao", "macae", "campos dos",
-      "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna",
-      "natividade", "miracema", "porciunciula", "santo antonio", "sao fidelis",
-      "sao jose", "barra de sao", "coracaozinho", "coracao de jesus", "coracao de j",
-      "indaiatuba", "cajamar", "uniao da vitoria", "unio da vitr",
-      // Additional patterns
-      "sao sebastiao", "sao joao", "sao goncalo", "sao pedro",
+      "niteroi", "sao joao de meriti", "nova iguazu", "mesquita", "nilopolis", "marica",
+      "sao pedro da aldeia", "araruama", "cabo frio", "buzios", "iguaba grande", "casimiro de abreu",
+      "rio das flores", "silva jardim", "carmo", "conceicao de macabu", "macae", "campos dos goitacazes",
+      "quissama", "carapebus", "cardoso moreira", "italva", "itaperuna", "bom jesus do itabapoana",
+      "natividade", "miracema", "porciunciula", "santo antonio de padua", "sao fidelis",
+      "sao jose do calcado", "barra de sao francisco", "coracaozinho", "coracao de jesus",
+      "indaiatuba", "cajamar", "uniao da vitoria",
     ];
 
     // Fetch all transactions for this user that need migration
@@ -398,6 +396,56 @@ export async function fixOnlinePurchasesByCity(userId: string) {
     return { updated: updateCount };
   } catch (err) {
     console.error("Error fixing online purchases by city:", err);
+    throw err;
+  }
+}
+
+/** Recategorize all transactions using updated categorization logic */
+export async function recategorizeAllTransactions(userId: string) {
+  try {
+    // Import the categorize function
+    const { categorize } = await import("./pdfExtract");
+    
+    // Fetch ALL transactions for this user
+    const { data: txsData, error: fetchErr } = await supabase
+      .from("card_transactions")
+      .select("id, description, amount, category")
+      .eq("user_id", userId);
+
+    if (fetchErr) throw fetchErr;
+
+    if (!txsData || txsData.length === 0) {
+      console.log("No transactions to recategorize");
+      return { updated: 0 };
+    }
+
+    let updateCount = 0;
+
+    // Process each transaction
+    for (const tx of txsData) {
+      const correctCategory = categorize(tx.description, tx.amount);
+      
+      // Only update if category differs
+      if (tx.category !== correctCategory) {
+        const { error: updateErr } = await supabase
+          .from("card_transactions")
+          .update({ category: correctCategory })
+          .eq("id", tx.id)
+          .eq("user_id", userId);
+
+        if (updateErr) {
+          console.error(`Error updating transaction ${tx.id}:`, updateErr);
+        } else {
+          console.log(`Recategorized: "${tx.description}" from "${tx.category}" to "${correctCategory}"`);
+          updateCount++;
+        }
+      }
+    }
+
+    console.log(`Recategorized ${updateCount} transactions total`);
+    return { updated: updateCount };
+  } catch (err) {
+    console.error("Error recategorizing transactions:", err);
     throw err;
   }
 }

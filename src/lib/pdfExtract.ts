@@ -31,17 +31,19 @@ export interface ExtractedData {
 
 const CATEGORIES: { name: string; keywords: RegExp }[] = [
   // iFood / entrega — vem ANTES de Alimentação para capturar IFD* e congeners
-  { name: "Ifood / Restaurantes", keywords: /\bifd\s*\*|ifood|uber\s?eats|rappi|deliverydireto|delivery/i },
+  { name: "Ifood / Restaurantes", keywords: /\bifd\s*\*|ifood|uber\s?eats|rappi|deliverydireto|delivery|loggi.*food/i },
   // Alimentação: restaurantes, lanchonetes, padarias — mas NÃO delivery
   { name: "Alimentação", keywords: /restaurant|padaria|lanchonete|burger|pizzar|cafe|café|mc\s?donald|\bbk\b|subway|outback/i },
   // Compras Online: plataformas de e-commerce (cidades detectadas via normalizeText)
   { name: "Compras Online", keywords: /amazon|mercado\s?livre|mercadoliv|ec\s*\*\s*mercadoli|mp\s*\*\s*mercadoliv|\bmp\s*\*|shopee|magalu|magazine|aliexpress|americanas|submarino|shein/i },
   // Mercado: apenas supermercados reais (sem "mercado" genérico para evitar falsos positivos)
   { name: "Mercados / Panificadoras", keywords: /supermerc|carrefour|\bextra\b|pao\s?de\s?acucar|assai|atacad|hortifr|sams\s?club|prezunic|mundial|gbarbosa|bistek|hipermercado|mercado\s+do\s+polaco|panificadora|kipao/i },
-  { name: "Transporte", keywords: /\buber\b(?!\s?eats)|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina/i },
-  { name: "Assinaturas", keywords: /netflix|spotify|amazon\s?prime|disney|hbo|youtube|apple\.com|icloud|google|microsoft|adobe|chatgpt|openai|claude|anthropic/i },
+  // Transporte: Uber, 99, táxi, combustível, etc.
+  { name: "Transporte", keywords: /\buber\s*\*|\buber\b(?!\s?eats)|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina|\b99\b/i },
+  // Assinaturas: Google, Netflix, etc.
+  { name: "Assinaturas", keywords: /netflix|spotify|amazon\s?prime|disney|hbo|youtube|apple\.com|icloud|google|microsoft|adobe|chatgpt|openai|claude|anthropic|dl\s*\*?\s*google|google\s*play/i },
   { name: "Saúde", keywords: /farma|drogaria|drogasil|pacheco|raia|hospital|clinica|laborat|dentist|psico/i },
-  { name: "Telefonia (Planos/Aparelhos)", keywords: /lojasc?larofoz.*foz\s+do\s+iguac|foz\s+do\s+iguac.*lojasc?larofoz/i },
+  { name: "Telefonia (Planos/Aparelhos)", keywords: /tim|vivo|claro|oi\s+br|net\b|sky|enel|cemig|sabesp|copasa|cpfl|telecom|telefon/i },
   { name: "Vestuário", keywords: /zara|renner|cea|c&a|riachuelo|nike|adidas|centauro|loja|fashion|hering/i },
   { name: "Lazer", keywords: /cinema|ingresso|show|teatro|park|\bbar\s|pub|cervej|steam|playstation|xbox|nintendo/i },
   { name: "Viagem", keywords: /hotel|airbnb|booking|decolar|latam|gol|azul|smiles|cvc|hertz|localiza/i },
