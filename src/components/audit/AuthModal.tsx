@@ -20,12 +20,11 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   if (!isOpen) return null;
 
@@ -44,48 +43,22 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     try {
       const trimmedEmail = email.trim();
       if (!trimmedEmail) throw new Error("Por favor, digite seu e-mail.");
-      if (password.length < 6) throw new Error("A senha deve conter no mínimo 6 caracteres.");
 
-      if (isLogin) {
-        // Sign In
-        const { data, error: authErr } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password
-        });
-
-        if (authErr) {
-          if (authErr.message === "Invalid login credentials") {
-            throw new Error("E-mail ou senha incorretos.");
-          }
-          throw authErr;
+      // Enviar Magic Link por email
+      const { error: authErr } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: window.location.origin,
         }
-        
-        setSuccessMsg("Entrando... Conexão segura estabelecida!");
-        setTimeout(() => {
-          onSuccess(data.user);
-          onClose();
-        }, 1200);
-      } else {
-        // Sign Up
-        const { data, error: authErr } = await supabase.auth.signUp({
-          email: trimmedEmail,
-          password
-        });
+      });
 
-        if (authErr) throw authErr;
+      if (authErr) throw authErr;
 
-        if (data.user?.identities?.length === 0) {
-          throw new Error("Este e-mail já está cadastrado. Tente fazer login!");
-        }
-
-        setSuccessMsg("Conta criada! Verifique seu e-mail para confirmação se necessário.");
-        setTimeout(() => {
-          if (data.user) {
-            onSuccess(data.user);
-          }
-          onClose();
-        }, 3000);
-      }
+      setEmailSent(true);
+      setSuccessMsg("Link de acesso enviado! Verifique seu e-mail.");
+      setTimeout(() => {
+        onClose();
+      }, 3000);
     } catch (err: any) {
       setError(err?.message || "Ocorreu um erro inesperado.");
     } finally {
@@ -125,31 +98,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           </p>
         </div>
 
-        {/* Tab Selector */}
-        <div className="grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-xl border border-white/5 mb-6 text-sm font-medium">
-          <button
-            onClick={() => { setIsLogin(true); setError(null); setSuccessMsg(null); }}
-            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              isLogin 
-                ? "bg-primary text-white shadow-md shadow-primary/30" 
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <LogIn className="size-3.5" />
-            Entrar
-          </button>
-          <button
-            onClick={() => { setIsLogin(false); setError(null); setSuccessMsg(null); }}
-            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              !isLogin 
-                ? "bg-primary text-white shadow-md shadow-primary/30" 
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <UserPlus className="size-3.5" />
-            Criar Conta
-          </button>
-        </div>
+        {/* Tab Selector - REMOVIDO, usar magic link direto */}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -165,27 +114,10 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@exemplo.com"
+                placeholder="seu@email.com"
                 required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm font-medium transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Password field */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Senha
-            </label>
-            <div className="relative">
-              <KeyRound className="absolute left-3 top-3 size-4.5 text-muted-foreground/60" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="******"
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm font-medium transition-all"
+                disabled={emailSent}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm font-medium transition-all disabled:opacity-50"
               />
             </div>
           </div>
@@ -208,20 +140,20 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           {/* Submit button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || emailSent}
             className="w-full bg-primary hover:bg-primary-hover active:scale-[0.98] text-white font-semibold py-3 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 text-sm transition-all hover:shadow-primary/45 disabled:opacity-50 disabled:pointer-events-none"
           >
             {loading ? (
               <Loader2 className="size-4 animate-spin" />
-            ) : isLogin ? (
+            ) : emailSent ? (
               <>
-                <LogIn className="size-4" />
-                Acessar Auditor
+                <CheckCircle2 className="size-4" />
+                Link enviado!
               </>
             ) : (
               <>
-                <UserPlus className="size-4" />
-                Criar Minha Conta
+                <Mail className="size-4" />
+                Enviar Link de Acesso
               </>
             )}
           </button>
