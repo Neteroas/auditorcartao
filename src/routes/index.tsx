@@ -59,17 +59,24 @@ function normalizeHistoricTransactionCategory(t: RawTransaction): RawTransaction
   return t;
 }
 
-/** Fix transaction categories using the updated categorization logic */
-function fixLocalTransactionCategories(txs: RawTransaction[]): RawTransaction[] {
+/** Fix transaction categories using the updated categorization logic.
+ *  Preserves user-customized categories (anything outside DEFAULT_CATEGORIES
+ *  or anything the user kept in their custom categories list). */
+function fixLocalTransactionCategories(
+  txs: RawTransaction[],
+  customCategories: Set<string> = new Set(),
+): RawTransaction[] {
   return txs.map((t) => {
+    // Never overwrite a transaction the user moved into a custom category
+    if (customCategories.has(t.category)) return t;
     const recalculatedCategory = categorize(t.description, t.amount);
-    // Only update if the recalculated category differs from current
     if (t.category !== recalculatedCategory) {
       return { ...t, category: recalculatedCategory };
     }
     return t;
   });
 }
+
 
 /** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
 function txKey(t: RawTransaction): string {
@@ -102,6 +109,16 @@ function Index() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
+        // Read custom categories first so we don't clobber them when recategorizing
+        let customCats = new Set<string>();
+        try {
+          const rawCats = localStorage.getItem(CATEGORIES_KEY);
+          if (rawCats) {
+            const parsed: string[] = JSON.parse(rawCats);
+            customCats = new Set(parsed.filter((c) => !DEFAULT_CATEGORIES.includes(c)));
+          }
+        } catch {}
+
         let loadedTxs = JSON.parse(raw);
         loadedTxs = loadedTxs.map((t: any) => {
           let tx = t;
@@ -113,13 +130,14 @@ function Index() {
           }
           return tx;
         });
-        // Apply the new categorization logic to fix categories
-        loadedTxs = fixLocalTransactionCategories(loadedTxs);
+        // Apply the new categorization logic, preserving custom-category assignments
+        loadedTxs = fixLocalTransactionCategories(loadedTxs, customCats);
         setTxs(loadedTxs);
       }
     } catch {
       setTxs([]);
     }
+
 
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);

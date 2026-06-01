@@ -433,7 +433,15 @@ export async function recategorizeAllTransactions(userId: string) {
   try {
     // Import the categorize function
     const { categorize } = await import("./pdfExtract");
-    
+
+    // Fetch custom categories to preserve user's manual choices
+    const { data: customCatsData, error: catsErr } = await supabase
+      .from("card_categories")
+      .select("name")
+      .eq("user_id", userId);
+    if (catsErr) throw catsErr;
+    const customCategories = new Set((customCatsData || []).map((c: any) => c.name));
+
     // Fetch ALL transactions for this user
     const { data: txsData, error: fetchErr } = await supabase
       .from("card_transactions")
@@ -451,8 +459,13 @@ export async function recategorizeAllTransactions(userId: string) {
 
     // Process each transaction
     for (const tx of txsData) {
+      // ✅ Preserve user's manual classification into custom categories
+      if (customCategories.has(tx.category)) {
+        continue;
+      }
+
       const correctCategory = categorize(tx.description, tx.amount);
-      
+
       // Only update if category differs
       if (tx.category !== correctCategory) {
         const { error: updateErr } = await supabase
@@ -468,6 +481,7 @@ export async function recategorizeAllTransactions(userId: string) {
           updateCount++;
         }
       }
+
     }
 
     console.log(`Recategorized ${updateCount} transactions total`);
