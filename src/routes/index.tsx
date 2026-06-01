@@ -59,17 +59,24 @@ function normalizeHistoricTransactionCategory(t: RawTransaction): RawTransaction
   return t;
 }
 
-/** Fix transaction categories using the updated categorization logic */
-function fixLocalTransactionCategories(txs: RawTransaction[]): RawTransaction[] {
+/** Fix transaction categories using the updated categorization logic.
+ *  Preserves user-customized categories (anything outside DEFAULT_CATEGORIES
+ *  or anything the user kept in their custom categories list). */
+function fixLocalTransactionCategories(
+  txs: RawTransaction[],
+  customCategories: Set<string> = new Set(),
+): RawTransaction[] {
   return txs.map((t) => {
+    // Never overwrite a transaction the user moved into a custom category
+    if (customCategories.has(t.category)) return t;
     const recalculatedCategory = categorize(t.description, t.amount);
-    // Only update if the recalculated category differs from current
     if (t.category !== recalculatedCategory) {
       return { ...t, category: recalculatedCategory };
     }
     return t;
   });
 }
+
 
 /** Chave única por transação: garante que a mesma transação nunca seja contada duas vezes */
 function txKey(t: RawTransaction): string {
