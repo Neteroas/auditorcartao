@@ -438,7 +438,7 @@ function Index() {
         ) : (
           <section>
             {cloudStatus && (
-              <div className="mb-6 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm flex gap-3 text-primary">
+              <div className="mb-6 border border-primary/25 bg-primary/5 p-4 flex gap-3 text-primary text-xs rounded-sm">
                 <span className="font-semibold">{cloudStatus}</span>
               </div>
             )}
