@@ -48,7 +48,9 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       const { error: authErr } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
         options: {
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: window.location.origin === 'http://localhost:3000' 
+            ? 'https://auditorcartao.lovable.app' 
+            : window.location.origin,
         }
       });
 
