@@ -40,7 +40,8 @@ export function useSupabase() {
       } finally {
         setLoading(false);
       }
-    }
+    },
+    []
   );
 
   const insert = useCallback(
