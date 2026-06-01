@@ -109,6 +109,16 @@ function Index() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
+        // Read custom categories first so we don't clobber them when recategorizing
+        let customCats = new Set<string>();
+        try {
+          const rawCats = localStorage.getItem(CATEGORIES_KEY);
+          if (rawCats) {
+            const parsed: string[] = JSON.parse(rawCats);
+            customCats = new Set(parsed.filter((c) => !DEFAULT_CATEGORIES.includes(c)));
+          }
+        } catch {}
+
         let loadedTxs = JSON.parse(raw);
         loadedTxs = loadedTxs.map((t: any) => {
           let tx = t;
@@ -120,13 +130,14 @@ function Index() {
           }
           return tx;
         });
-        // Apply the new categorization logic to fix categories
-        loadedTxs = fixLocalTransactionCategories(loadedTxs);
+        // Apply the new categorization logic, preserving custom-category assignments
+        loadedTxs = fixLocalTransactionCategories(loadedTxs, customCats);
         setTxs(loadedTxs);
       }
     } catch {
       setTxs([]);
     }
+
 
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
