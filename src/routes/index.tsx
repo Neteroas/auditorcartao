@@ -418,7 +418,7 @@ function Index() {
             <section>
               <UploadDropzone onFiles={handleFiles} busy={busy} />
               {cloudStatus && (
-                <div className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm flex gap-3 text-primary">
+                <div className="mt-4 border border-primary/25 bg-primary/5 p-4 flex gap-3 text-primary text-xs rounded-sm">
                   <span className="font-semibold">{cloudStatus}</span>
                 </div>
               )}
