@@ -173,8 +173,20 @@ function extractDateFromFilename(filename: string): string | null {
   for (const [name, num] of Object.entries(monthsBR)) {
     if (clean.includes(name)) {
       const yearMatch = clean.match(/(20\d{2})/);
-      const y = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
-      return `${y}-${num}-10`;
+      if (yearMatch) {
+        return `${yearMatch[1]}-${num}-10`;
+      }
+
+      const shortYearMatch = clean.match(/\b(\d{2})\b/);
+      if (shortYearMatch) {
+        const yearNum = Number(shortYearMatch[1]);
+        if (yearNum >= 0 && yearNum <= 99) {
+          const fullYear = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
+          return `${fullYear}-${num}-10`;
+        }
+      }
+
+      return `${new Date().getFullYear()}-${num}-10`;
     }
   }
   return null;
