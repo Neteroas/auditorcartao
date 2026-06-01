@@ -19,7 +19,7 @@ export async function fetchCloudData(userId: string) {
     if (txsErr) throw txsErr;
 
     // Map database columns back to camelCase RawTransaction interface
-    const txs: RawTransaction[] = (txsData || []).map((t) => ({
+    const txs: RawTransaction[] = (txsData || []).map((t: any) => ({
       id: t.transaction_id,
       date: t.date,
       description: t.description,
