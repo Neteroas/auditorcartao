@@ -185,6 +185,17 @@ function Index() {
     localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
   }, [summaries]);
 
+  // Sincronização automática periódica (a cada 60s) se logado
+  useEffect(() => {
+    if (!user || !supabaseEnabled) return;
+
+    const syncInterval = setInterval(() => {
+      synchronizeCloud(user.id);
+    }, 60000); // A cada 60 segundos
+
+    return () => clearInterval(syncInterval);
+  }, [user, supabaseEnabled]);
+
   async function synchronizeCloud(userId: string) {
     if (!supabaseEnabled) {
       setError("Supabase não está configurado");
@@ -417,11 +428,47 @@ function Index() {
             {/* Upload section */}
             <section>
               <UploadDropzone onFiles={handleFiles} busy={busy} />
-              {cloudStatus && (
-                <div className="mt-4 border border-primary/25 bg-primary/5 p-4 flex gap-3 text-primary text-xs rounded-sm">
-                  <span className="font-semibold">{cloudStatus}</span>
-                </div>
-              )}
+              
+              {/* Status de sincronização com botão */}
+              <div className="mt-4 space-y-3">
+                {cloudStatus && (
+                  <div className={`border p-4 flex items-center justify-between gap-3 text-xs rounded-sm ${
+                    cloudStatus.includes("Erro") 
+                      ? "border-destructive/25 bg-destructive/5 text-destructive"
+                      : cloudStatus.includes("Modo local")
+                      ? "border-warning/25 bg-warning/5 text-warning"
+                      : "border-primary/25 bg-primary/5 text-primary"
+                  }`}>
+                    <span className="font-semibold">{cloudStatus}</span>
+                    {user && supabaseEnabled && (
+                      <button
+                        onClick={() => synchronizeCloud(user.id)}
+                        disabled={busy}
+                        className="px-3 py-1.5 rounded bg-current/20 hover:bg-current/30 disabled:opacity-50 text-xs font-semibold whitespace-nowrap transition-colors"
+                      >
+                        {busy ? "Sincronizando..." : "Sincronizar Agora"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                
+                {/* Aviso se não logado */}
+                {!user && supabaseEnabled && txs.length > 0 && (
+                  <div className="border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm">
+                    <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Dados locais apenas</p>
+                    <p className="text-xs text-amber-700/80 mb-3">
+                      Seus dados estão salvos apenas neste navegador. Faça login para sincronizar com sua conta e acessar em outros dispositivos.
+                    </p>
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded transition-colors"
+                    >
+                      Fazer Login para Sincronizar
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {error && (
                 <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
                   <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -438,10 +485,42 @@ function Index() {
         ) : (
           <section>
             {cloudStatus && (
-              <div className="mb-6 border border-primary/25 bg-primary/5 p-4 flex gap-3 text-primary text-xs rounded-sm">
+              <div className={`mb-6 border p-4 flex items-center justify-between gap-3 text-xs rounded-sm ${
+                cloudStatus.includes("Erro") 
+                  ? "border-destructive/25 bg-destructive/5 text-destructive"
+                  : cloudStatus.includes("Modo local")
+                  ? "border-warning/25 bg-warning/5 text-warning"
+                  : "border-primary/25 bg-primary/5 text-primary"
+              }`}>
                 <span className="font-semibold">{cloudStatus}</span>
+                {user && supabaseEnabled && (
+                  <button
+                    onClick={() => synchronizeCloud(user.id)}
+                    disabled={busy}
+                    className="px-3 py-1.5 rounded bg-current/20 hover:bg-current/30 disabled:opacity-50 text-xs font-semibold whitespace-nowrap transition-colors"
+                  >
+                    {busy ? "Sincronizando..." : "Sincronizar Agora"}
+                  </button>
+                )}
               </div>
             )}
+            
+            {/* Aviso se não logado e tem dados */}
+            {!user && supabaseEnabled && txs.length > 0 && (
+              <div className="mb-6 border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm">
+                <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Dados locais apenas</p>
+                <p className="text-xs text-amber-700/80 mb-3">
+                  Seus dados estão salvos apenas neste navegador. Faça login para sincronizar com sua conta e acessar em outros dispositivos.
+                </p>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded transition-colors"
+                >
+                  Fazer Login para Sincronizar
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="mb-8 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm flex gap-3">
                 <div className="size-5 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0 mt-0.5">
