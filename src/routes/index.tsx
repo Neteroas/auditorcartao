@@ -83,6 +83,8 @@ function mergeCategories(
 ) {
   const customLocal = localCategories.filter((c) => !defaultCategories.includes(c));
   const customCloud = cloudCategories.filter((c) => !defaultCategories.includes(c));
+  // IMPORTANTE: Manter TODAS as categorias locais customizadas + as da nuvem
+  // Nunca perder uma categoria que o usuário criou localmente!
   return [...defaultCategories, ...Array.from(new Set([...customLocal, ...customCloud]))];
 }
 
@@ -208,11 +210,21 @@ function Index() {
       await fixHistoricLojasClaroFozCategory(userId);
       await fixOnlinePurchasesByCity(userId);
       await recategorizeAllTransactions(userId);
+      
+      console.log("Categorias locais ANTES de sincronizar:", categoriesList);
+      
       const cloud = await syncLocalDataToCloud(userId, txs, categoriesList, summaries, DEFAULT_CATEGORIES);
+      
+      console.log("Categorias do Supabase após sincronizar:", cloud.customCategories);
+      
       const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);
       setTxs(normalizedTxs);
       setSummaries(cloud.summaries);
-      setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories));
+      
+      const mergedCats = mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories);
+      console.log("Categorias FINAIS após merge:", mergedCats);
+      
+      setCategoriesList(mergedCats);
       setCloudStatus("Dados sincronizados com a nuvem");
     } catch (err: any) {
       setError(err?.message || "Não foi possível sincronizar com a nuvem.");

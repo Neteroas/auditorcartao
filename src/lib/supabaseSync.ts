@@ -103,6 +103,8 @@ export async function syncLocalDataToCloud(
 
     // 3. Identify and upload custom categories (excluding defaults)
     const newCats = localCats.filter((c) => !defaultCategories.includes(c) && !cloud.customCategories.includes(c));
+    console.log("Categorias customizadas para upload:", newCats);
+    
     if (newCats.length > 0) {
       const catsToInsert = newCats.map((name) => ({
         user_id: userId,
@@ -111,6 +113,7 @@ export async function syncLocalDataToCloud(
       // Use upsert or select to avoid duplicates
       const { error } = await supabase.from("card_categories").upsert(catsToInsert, { onConflict: "user_id,name" });
       if (error) throw error;
+      console.log("Categorias upadas com sucesso:", newCats);
     }
 
     // 4. Upload summaries
