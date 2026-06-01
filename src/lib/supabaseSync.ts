@@ -19,7 +19,7 @@ export async function fetchCloudData(userId: string) {
     if (txsErr) throw txsErr;
 
     // Map database columns back to camelCase RawTransaction interface
-    const txs: RawTransaction[] = (txsData || []).map((t) => ({
+    const txs: RawTransaction[] = (txsData || []).map((t: any) => ({
       id: t.transaction_id,
       date: t.date,
       description: t.description,
@@ -39,7 +39,7 @@ export async function fetchCloudData(userId: string) {
       .eq("user_id", userId);
 
     if (catsErr) throw catsErr;
-    const customCategories: string[] = (catsData || []).map((c) => c.name);
+    const customCategories: string[] = (catsData || []).map((c: any) => c.name);
 
     // 3. Fetch invoice summaries
     const { data: sumsData, error: sumsErr } = await supabase

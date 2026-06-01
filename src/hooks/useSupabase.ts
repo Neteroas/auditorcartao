@@ -40,7 +40,8 @@ export function useSupabase() {
       } finally {
         setLoading(false);
       }
-    }
+    },
+    []
   );
 
   const insert = useCallback(
@@ -64,7 +65,8 @@ export function useSupabase() {
       } finally {
         setLoading(false);
       }
-    }
+    },
+    []
   );
 
   const update = useCallback(
@@ -93,7 +95,8 @@ export function useSupabase() {
       } finally {
         setLoading(false);
       }
-    }
+    },
+    []
   );
 
   const remove = useCallback(
@@ -113,7 +116,8 @@ export function useSupabase() {
       } finally {
         setLoading(false);
       }
-    }
+    },
+    []
   );
 
   return { query, insert, update, remove, loading, error };
