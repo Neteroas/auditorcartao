@@ -208,9 +208,8 @@ function Index() {
     setError(null);
     try {
       await fixHistoricLojasClaroFozCategory(userId);
-      // DESABILITADO: fixOnlinePurchasesByCity estava recategorizando automaticamente 
-      // transações com nomes de cidades para "Compras Online", apagando categorias customizadas
-      // await fixOnlinePurchasesByCity(userId);
+      // Modificado: agora respeita categorias customizadas
+      await fixOnlinePurchasesByCity(userId);
       await recategorizeAllTransactions(userId);
       
       console.log("Categorias locais ANTES de sincronizar:", categoriesList);

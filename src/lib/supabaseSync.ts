@@ -310,9 +310,28 @@ export async function clearAllCloudData(userId: string) {
   }
 }
 
-/** Migrate all transactions with city names (except Foz do Iguaçu) to "Compras Online" category */
+/** Migrate all transactions with city names (except Foz do Iguaçu) to "Compras Online" category
+ * BUT: Respects custom categories - only recategorizes transactions in DEFAULT categories
+ */
 export async function fixOnlinePurchasesByCity(userId: string) {
   try {
+    // Fetch custom categories to know which ones to preserve
+    const { data: customCatsData, error: catsErr } = await supabase
+      .from("card_categories")
+      .select("name")
+      .eq("user_id", userId);
+
+    if (catsErr) throw catsErr;
+    
+    const customCategories = new Set((customCatsData || []).map((c: any) => c.name));
+    console.log("Custom categories to preserve:", Array.from(customCategories));
+    
+    const DEFAULT_CATEGORIES = [
+      "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
+      "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Telefonia (Planos/Aparelhos)", "Tarifas",
+      "Pagamentos/Créditos", "Outros"
+    ];
+    
     const CITY_PATTERNS = [
       "sao paulo", "rio de janeiro", "belo horizonte", "brasilia", "curitiba", "porto alegre",
       "salvador", "fortaleza", "recife", "manaus", "goiania", "campinas", "santos", "sorocaba",
@@ -356,6 +375,12 @@ export async function fixOnlinePurchasesByCity(userId: string) {
     // Process each transaction
     for (const tx of txsData) {
       const desc = tx.description.toLowerCase();
+      
+      // ✅ IMPORTANTE: Skip if already in a custom category (preserve user's choices!)
+      if (customCategories.has(tx.category)) {
+        console.log(`Skipping ${tx.id}: already in custom category "${tx.category}"`);
+        continue;
+      }
 
       // Skip if Foz do Iguaçu
       if (desc.includes("foz") && desc.includes("iguac")) {
