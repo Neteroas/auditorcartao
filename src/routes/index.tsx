@@ -290,7 +290,7 @@ function Index() {
         );
       }
 
-      if (!all.length && alreadyImported.length === 0) {
+      if (!all.length && Object.keys(newSummaries).length === 0 && alreadyImported.length === 0) {
         setError("Nenhum lançamento foi reconhecido no(s) PDF(s). O layout pode estar fora dos padrões suportados, ou o arquivo é uma imagem escaneada.");
       }
 
