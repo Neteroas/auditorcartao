@@ -315,19 +315,26 @@ export async function extractData(file: File): Promise<ExtractedData> {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const items = content.items as any[];
-    // Group by y position to reconstruct lines
-    const lines: Record<string, { x: number; str: string }[]> = {};
+    // Group by y position with ~3px tolerance to reconstruct lines.
+    // Exact rounding splits items with sub-pixel baseline differences, breaking
+    // the regex and causing some PDFs to extract zero transactions.
+    const Y_TOL = 3;
+    const buckets: { y: number; items: { x: number; str: string }[] }[] = [];
     for (const it of items) {
-      const y = Math.round(it.transform[5]);
+      const y = it.transform[5];
       const x = it.transform[4];
-      lines[y] = lines[y] || [];
-      lines[y].push({ x, str: it.str });
+      const str = it.str;
+      let bucket = buckets.find((b) => Math.abs(b.y - y) <= Y_TOL);
+      if (!bucket) {
+        bucket = { y, items: [] };
+        buckets.push(bucket);
+      }
+      bucket.items.push({ x, str });
     }
-    const sorted = Object.keys(lines).map(Number).sort((a, b) => b - a);
+    buckets.sort((a, b) => b.y - a.y);
     let pageText = "";
-    for (const y of sorted) {
-      // Sort items on the same line horizontally by X coordinate to guarantee correct left-to-right reading order
-      const lineStr = lines[y]
+    for (const b of buckets) {
+      const lineStr = b.items
         .sort((a, b) => a.x - b.x)
         .map((it) => it.str)
         .join(" ");
