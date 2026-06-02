@@ -113,11 +113,19 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   })();
 
   const invoiceSources = useMemo(() => {
-    const sources = Array.from(new Set(txs.map((t) => t.source)));
+    const sources = Array.from(new Set([
+      ...txs.map((t) => t.source),
+      ...Object.keys(summaries),
+    ]));
     return sources.sort((a, b) => {
       const getDueDate = (source: string) => {
         const tx = txs.find((t) => t.source === source && t.invoiceDueDate);
-        return tx?.invoiceDueDate ?? "9999-12-31";
+        if (tx?.invoiceDueDate) return tx.invoiceDueDate;
+
+        const summary = summaries[source];
+        if (summary) return source;
+
+        return "9999-12-31";
       };
 
       const dateA = getDueDate(a);
@@ -125,7 +133,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
       if (dateA !== dateB) return dateA.localeCompare(dateB);
       return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
     });
-  }, [txs]);
+  }, [txs, summaries]);
 
   const [selectedSource, setSelectedSource] = useState<string>("");
   const activeSource = selectedSource || invoiceSources[0] || "";
