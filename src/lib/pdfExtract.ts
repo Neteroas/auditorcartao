@@ -405,12 +405,16 @@ export async function extractData(file: File): Promise<ExtractedData> {
   // Pass 1: match within each reconstructed line
   for (const line of rawLines) tryMatchLine(line);
 
-  // Pass 2: fallback — some PDFs split a transaction across 2 consecutive lines
-  // (date+description on one, amount on the next, or vice-versa). Join pairs
+  // Pass 2: fallback — some PDFs split a transaction across 2-3 consecutive lines
+  // (date, description e valor acabam quebrados em partes separadas). Join windows
   // and re-run; dedup via seenKeys prevents double-counting.
   for (let i = 0; i < rawLines.length - 1; i++) {
     if (!rawLines[i] || !rawLines[i + 1]) continue;
     tryMatchLine(`${rawLines[i]} ${rawLines[i + 1]}`);
+
+    if (i < rawLines.length - 2 && rawLines[i + 2]) {
+      tryMatchLine(`${rawLines[i]} ${rawLines[i + 1]} ${rawLines[i + 2]}`);
+    }
   }
 
   const summary = extractInvoiceSummary(page1Text);
