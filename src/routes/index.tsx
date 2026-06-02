@@ -268,7 +268,7 @@ function Index() {
       const alreadyImported: string[] = [];
 
       for (const f of files) {
-        const alreadyExists = txs.some((t) => t.source === f.name);
+        const alreadyExists = txs.some((t) => t.source === f.name) || Boolean(summaries[f.name]);
 
         const extracted = await extractData(f);
         if (extracted.summary) {
