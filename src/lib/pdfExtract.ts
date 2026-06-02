@@ -1,8 +1,17 @@
-import * as pdfjsLib from "pdfjs-dist";
-// @ts-ignore
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+let pdfjsLibPromise: Promise<typeof import("pdfjs-dist")> | null = null;
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+async function getPdfJs() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = (async () => {
+      const pdfjsLib = await import("pdfjs-dist");
+      const pdfWorker = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+      return pdfjsLib;
+    })();
+  }
+
+  return pdfjsLibPromise;
+}
 
 export interface RawTransaction {
   id: string;
@@ -306,6 +315,7 @@ function extractInvoiceSummary(text: string): InvoiceSummary | undefined {
 }
 
 export async function extractData(file: File): Promise<ExtractedData> {
+  const pdfjsLib = await getPdfJs();
   const data = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data }).promise;
   let fullText = "";
