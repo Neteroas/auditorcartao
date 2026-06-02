@@ -315,19 +315,26 @@ export async function extractData(file: File): Promise<ExtractedData> {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const items = content.items as any[];
-    // Group by y position to reconstruct lines
-    const lines: Record<string, { x: number; str: string }[]> = {};
+    // Group by y position with ~3px tolerance to reconstruct lines.
+    // Exact rounding splits items with sub-pixel baseline differences, breaking
+    // the regex and causing some PDFs to extract zero transactions.
+    const Y_TOL = 3;
+    const buckets: { y: number; items: { x: number; str: string }[] }[] = [];
     for (const it of items) {
-      const y = Math.round(it.transform[5]);
+      const y = it.transform[5];
       const x = it.transform[4];
-      lines[y] = lines[y] || [];
-      lines[y].push({ x, str: it.str });
+      const str = it.str;
+      let bucket = buckets.find((b) => Math.abs(b.y - y) <= Y_TOL);
+      if (!bucket) {
+        bucket = { y, items: [] };
+        buckets.push(bucket);
+      }
+      bucket.items.push({ x, str });
     }
-    const sorted = Object.keys(lines).map(Number).sort((a, b) => b - a);
+    buckets.sort((a, b) => b.y - a.y);
     let pageText = "";
-    for (const y of sorted) {
-      // Sort items on the same line horizontally by X coordinate to guarantee correct left-to-right reading order
-      const lineStr = lines[y]
+    for (const b of buckets) {
+      const lineStr = b.items
         .sort((a, b) => a.x - b.x)
         .map((it) => it.str)
         .join(" ");
@@ -354,11 +361,11 @@ export async function extractData(file: File): Promise<ExtractedData> {
   const lineRe = /(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?)\s+(.+?)\s+(-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2}(?:\s?CR)?)\b/gi;
   const instRe = /(\d{1,2})\s?\/\s?(\d{1,2})/;
 
-  for (const rawLine of fullText.split("\n")) {
-    const line = rawLine.replace(/\s+/g, " ").trim();
-    if (!line) continue;
-    
-    // Reset regex match index for each line
+  const rawLines = fullText.split("\n").map((l) => l.replace(/\s+/g, " ").trim());
+  const seenKeys = new Set<string>();
+
+  const tryMatchLine = (line: string) => {
+    if (!line) return;
     lineRe.lastIndex = 0;
     let match;
     while ((match = lineRe.exec(line)) !== null) {
@@ -368,9 +375,11 @@ export async function extractData(file: File): Promise<ExtractedData> {
       if (isNaN(amount) || amount === 0) continue;
       const description = match[2].trim().replace(/\s{2,}/g, " ");
       if (description.length < 2) continue;
-      // Skip lines that are clearly summary/total headers (no real transaction content)
-      // Allow pagamento, crédito, saldo anterior — they are real entries with negative amounts
       if (/^(total\s+(da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(total|disponível|utilizado))$/i.test(description)) continue;
+
+      const key = `${date}|${description}|${amount.toFixed(2)}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
 
       let installment;
       const instMatch = description.match(instRe);
@@ -391,6 +400,17 @@ export async function extractData(file: File): Promise<ExtractedData> {
         invoiceDueDate,
       });
     }
+  };
+
+  // Pass 1: match within each reconstructed line
+  for (const line of rawLines) tryMatchLine(line);
+
+  // Pass 2: fallback — some PDFs split a transaction across 2 consecutive lines
+  // (date+description on one, amount on the next, or vice-versa). Join pairs
+  // and re-run; dedup via seenKeys prevents double-counting.
+  for (let i = 0; i < rawLines.length - 1; i++) {
+    if (!rawLines[i] || !rawLines[i + 1]) continue;
+    tryMatchLine(`${rawLines[i]} ${rawLines[i + 1]}`);
   }
 
   const summary = extractInvoiceSummary(page1Text);
