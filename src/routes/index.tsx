@@ -268,12 +268,17 @@ function Index() {
       const alreadyImported: string[] = [];
 
       for (const f of files) {
-        const alreadyExists = txs.some((t) => t.source === f.name) || Boolean(summaries[f.name]);
+        const existingTxCount = txs.filter((t) => t.source === f.name).length;
+        const hasExistingSummary = Boolean(summaries[f.name]);
 
         const extracted = await extractData(f);
         if (extracted.summary) {
           newSummaries[f.name] = extracted.summary;
         }
+
+        const isSummaryOnlyImport = existingTxCount === 0 && hasExistingSummary;
+        const canRepairExistingImport = isSummaryOnlyImport && extracted.transactions.length > 0;
+        const alreadyExists = existingTxCount > 0 || (hasExistingSummary && !canRepairExistingImport);
 
         if (alreadyExists) {
           alreadyImported.push(f.name);
