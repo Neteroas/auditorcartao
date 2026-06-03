@@ -163,6 +163,58 @@ function parseDate(token: string): string | null {
   return null;
 }
 
+const DATE_TOKEN_PATTERN = String.raw`\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?`;
+const AMOUNT_TOKEN_PATTERN = String.raw`-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2}(?:\s?CR)?`;
+const TRANSACTION_LINE_RE = new RegExp(`(${DATE_TOKEN_PATTERN})\\s+(.+?)\\s+(${AMOUNT_TOKEN_PATTERN})(?=\\s|$)`, "gi");
+const BLOCK_START_RE = new RegExp(`^\\s*(${DATE_TOKEN_PATTERN})(?:\\s+(${DATE_TOKEN_PATTERN}))?(?:\\s+|$)`, "i");
+const AMOUNT_GLOBAL_RE = new RegExp(AMOUNT_TOKEN_PATTERN, "gi");
+const INSTALLMENT_RE = /(\d{1,2})\s?\/\s?(\d{1,2})/;
+const TRANSACTION_BLOCK_BREAK_RE = /^(?:resumo\b|lan[çc]amentos?\b|data\b|descri[çc][aã]o\b|valor\b|saldo\s+(?:anterior|para)\b|pagamentos?\b|cr[eé]ditos?\b|compras?\s+(?:nacionais?|internacionais?)\b|tarifas?\b|encargos?\b|juros\b|total\b|limite\b)/i;
+const IGNORED_DESCRIPTION_RE = /^(?:total\s+(?:da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(?:total|dispon[ií]vel|utilizado)|data\s+descri[çc][aã]o\s+valor|data\s+lan[çc]amento|descri[çc][aã]o\s+do\s+lan[çc]amento)$/i;
+
+function createTransactionCandidate(
+  dateToken: string,
+  descriptionToken: string,
+  amountToken: string,
+  source: string,
+  invoiceDueDate?: string,
+): RawTransaction | null {
+  const date = parseDate(dateToken.trim().replace(/\s+/g, " "));
+  if (!date) return null;
+
+  const amount = parseBRLNumber(amountToken);
+  if (isNaN(amount) || amount === 0) return null;
+
+  let description = descriptionToken
+    .trim()
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\-–—:;|]+\s*/, "")
+    .replace(/\s+[\-–—:;|]+$/, "")
+    .trim();
+
+  if (!description || description.length < 2) return null;
+  if (IGNORED_DESCRIPTION_RE.test(description)) return null;
+
+  let installment;
+  const instMatch = description.match(INSTALLMENT_RE);
+  if (instMatch) {
+    const c = parseInt(instMatch[1]);
+    const t = parseInt(instMatch[2]);
+    if (t > 1 && t <= 48 && c <= t) installment = { current: c, total: t };
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    date,
+    description,
+    amount,
+    installment,
+    category: categorize(description, amount),
+    source,
+    invoiceDueDate,
+  };
+}
+
 function extractDateFromFilename(filename: string): string | null {
   const clean = filename.toLowerCase();
   const mY = clean.match(/(20\d{2})[-_](\d{1,2})/);
@@ -367,48 +419,24 @@ export async function extractData(file: File): Promise<ExtractedData> {
   }
 
   const transactions: RawTransaction[] = [];
-  // Use global matching (/gi) and increased digits capacity to support merged lines and extra columns
-  const lineRe = /(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2}\s+[a-z]{3}(?:\s+\d{2,4})?)\s+(.+?)\s+(-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2}(?:\s?CR)?)\b/gi;
-  const instRe = /(\d{1,2})\s?\/\s?(\d{1,2})/;
-
   const rawLines = fullText.split("\n").map((l) => l.replace(/\s+/g, " ").trim());
   const seenKeys = new Set<string>();
 
+  const pushCandidate = (candidate: RawTransaction | null) => {
+    if (!candidate) return false;
+    const key = `${candidate.date}|${candidate.description}|${candidate.amount.toFixed(2)}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    transactions.push(candidate);
+    return true;
+  };
+
   const tryMatchLine = (line: string) => {
     if (!line) return;
-    lineRe.lastIndex = 0;
+    TRANSACTION_LINE_RE.lastIndex = 0;
     let match;
-    while ((match = lineRe.exec(line)) !== null) {
-      const date = parseDate(match[1].trim().replace(/\s+/g, " "));
-      if (!date) continue;
-      const amount = parseBRLNumber(match[3]);
-      if (isNaN(amount) || amount === 0) continue;
-      const description = match[2].trim().replace(/\s{2,}/g, " ");
-      if (description.length < 2) continue;
-      if (/^(total\s+(da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(total|disponível|utilizado))$/i.test(description)) continue;
-
-      const key = `${date}|${description}|${amount.toFixed(2)}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-
-      let installment;
-      const instMatch = description.match(instRe);
-      if (instMatch) {
-        const c = parseInt(instMatch[1]);
-        const t = parseInt(instMatch[2]);
-        if (t > 1 && t <= 48 && c <= t) installment = { current: c, total: t };
-      }
-
-      transactions.push({
-        id: crypto.randomUUID(),
-        date,
-        description,
-        amount,
-        installment,
-        category: categorize(description, amount),
-        source: file.name,
-        invoiceDueDate,
-      });
+    while ((match = TRANSACTION_LINE_RE.exec(line)) !== null) {
+      pushCandidate(createTransactionCandidate(match[1], match[2], match[3], file.name, invoiceDueDate));
     }
   };
 
@@ -425,6 +453,65 @@ export async function extractData(file: File): Promise<ExtractedData> {
     if (i < rawLines.length - 2 && rawLines[i + 2]) {
       tryMatchLine(`${rawLines[i]} ${rawLines[i + 1]} ${rawLines[i + 2]}`);
     }
+  }
+
+  // Pass 3: parse transaction blocks that start with a date and span arbitrary
+  // wrapped lines. This covers newer statement layouts where launch date,
+  // description and BRL amount are split across 4+ lines or include a second
+  // date / foreign-currency amount before the final BRL charge.
+  const blocks: string[] = [];
+  let currentBlock = "";
+
+  const flushBlock = () => {
+    if (currentBlock.trim()) blocks.push(currentBlock.trim());
+    currentBlock = "";
+  };
+
+  for (const line of rawLines) {
+    if (!line) continue;
+
+    if (TRANSACTION_BLOCK_BREAK_RE.test(line)) {
+      flushBlock();
+      continue;
+    }
+
+    const startsWithDate = BLOCK_START_RE.test(line);
+    if (startsWithDate) {
+      flushBlock();
+      currentBlock = line;
+      continue;
+    }
+
+    if (currentBlock) {
+      currentBlock += ` ${line}`;
+    }
+  }
+  flushBlock();
+
+  for (const block of blocks) {
+    const startMatch = block.match(BLOCK_START_RE);
+    if (!startMatch) continue;
+
+    const remainder = block.slice(startMatch[0].length).trim();
+    if (!remainder) continue;
+
+    AMOUNT_GLOBAL_RE.lastIndex = 0;
+    const amounts = Array.from(remainder.matchAll(AMOUNT_GLOBAL_RE));
+    if (!amounts.length) continue;
+
+    const lastAmount = amounts[amounts.length - 1];
+    const amountIndex = lastAmount.index ?? -1;
+    if (amountIndex < 0) continue;
+
+    const description = remainder.slice(0, amountIndex).trim();
+    pushCandidate(createTransactionCandidate(startMatch[1], description, lastAmount[0], file.name, invoiceDueDate));
+  }
+
+  if (transactions.length === 0 && summary) {
+    console.warn("PDF importou só o resumo sem transações", {
+      file: file.name,
+      sampleLines: rawLines.filter(Boolean).slice(0, 25),
+    });
   }
 
   const summary = extractInvoiceSummary(page1Text);
