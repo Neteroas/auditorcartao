@@ -507,6 +507,8 @@ export async function extractData(file: File): Promise<ExtractedData> {
     pushCandidate(createTransactionCandidate(startMatch[1], description, lastAmount[0], file.name, invoiceDueDate));
   }
 
+  const summary = extractInvoiceSummary(page1Text);
+
   if (transactions.length === 0 && summary) {
     console.warn("PDF importou só o resumo sem transações", {
       file: file.name,
@@ -514,6 +516,5 @@ export async function extractData(file: File): Promise<ExtractedData> {
     });
   }
 
-  const summary = extractInvoiceSummary(page1Text);
   return { transactions, summary };
 }
