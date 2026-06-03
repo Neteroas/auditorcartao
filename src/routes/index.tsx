@@ -269,19 +269,18 @@ function Index() {
       const alreadyImported: string[] = [];
 
       for (const f of files) {
+        // Check both local state and what's actually in localStorage for this source
         const existingTxCount = txs.filter((t) => t.source === f.name).length;
-        const hasExistingSummary = Boolean(summaries[f.name]);
 
         const extracted = await extractData(f);
         if (extracted.summary) {
           newSummaries[f.name] = extracted.summary;
         }
 
-        const isSummaryOnlyImport = existingTxCount === 0 && hasExistingSummary;
-        const canRepairExistingImport = isSummaryOnlyImport && extracted.transactions.length > 0;
-        const alreadyExists = existingTxCount > 0 || (hasExistingSummary && !canRepairExistingImport);
-
-        if (alreadyExists) {
+        // Only block reimport if the file already has transactions saved.
+        // A file with a summary but ZERO transactions is a broken/incomplete import
+        // and must always be allowed to reimport to repair itself.
+        if (existingTxCount > 0) {
           alreadyImported.push(f.name);
           continue;
         }
