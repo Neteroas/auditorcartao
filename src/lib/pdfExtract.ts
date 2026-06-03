@@ -216,7 +216,7 @@ function createTransactionCandidate(
   };
 }
 
-function extractDateFromFilename(filename: string): string | null {
+export function extractDateFromFilename(filename: string): string | null {
   const clean = filename.toLowerCase();
   const mY = clean.match(/(20\d{2})[-_](\d{1,2})/);
   if (mY) {
@@ -227,16 +227,26 @@ function extractDateFromFilename(filename: string): string | null {
     return `${mYRev[2]}-${mYRev[1].padStart(2, "0")}-10`;
   }
   const monthsBR: Record<string, string> = {
-    jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
-    jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12",
+    // Put long month names first to prevent partial matching (e.g., "jul" matching "julho")
     janeiro: "01", fevereiro: "02", marco: "03", abril: "04", maio: "05", junho: "06",
-    julho: "07", agosto: "08", setembro: "09", outubro: "10", novembro: "11", dezembro: "12"
+    julho: "07", agosto: "08", setembro: "09", outubro: "10", novembro: "11", dezembro: "12",
+    jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
+    jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12"
   };
   for (const [name, num] of Object.entries(monthsBR)) {
     if (clean.includes(name)) {
       const yearMatch = clean.match(/(20\d{2})/);
       if (yearMatch) {
         return `${yearMatch[1]}-${num}-10`;
+      }
+
+      // Try to find a 2-digit year right after the month name or separated by a separator
+      const yearRegex = new RegExp(`${name}[-_\\s]?(\\d{2})\\b`);
+      const match = clean.match(yearRegex);
+      if (match) {
+        const yearNum = Number(match[1]);
+        const fullYear = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
+        return `${fullYear}-${num}-10`;
       }
 
       const shortYearMatch = clean.match(/\b(\d{2})\b/);
@@ -378,26 +388,34 @@ export async function extractData(file: File): Promise<ExtractedData> {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const items = content.items as any[];
-    // Group by y position with ~3px tolerance to reconstruct lines.
-    // Exact rounding splits items with sub-pixel baseline differences, breaking
-    // the regex and causing some PDFs to extract zero transactions.
-    const Y_TOL = 3;
-    const buckets: { y: number; items: { x: number; str: string }[] }[] = [];
-    for (const it of items) {
+    
+    // Sort items by y-coordinate descending (top-to-bottom of the page)
+    const sortedItems = [...items].sort((a, b) => b.transform[5] - a.transform[5]);
+    const linesList: { y: number; items: { x: number; str: string }[] }[] = [];
+    
+    for (const it of sortedItems) {
       const y = it.transform[5];
       const x = it.transform[4];
       const str = it.str;
-      let bucket = buckets.find((b) => Math.abs(b.y - y) <= Y_TOL);
-      if (!bucket) {
-        bucket = { y, items: [] };
-        buckets.push(bucket);
+      
+      // Group items with similar y-coordinates (tolerance of 2.0 points)
+      // to resolve sub-pixel baseline offsets without merging closely spaced lines.
+      const Y_TOL = 2.0;
+      let line = linesList.find((l) => Math.abs(l.y - y) <= Y_TOL);
+      if (!line) {
+        line = { y, items: [] };
+        linesList.push(line);
       }
-      bucket.items.push({ x, str });
+      line.items.push({ x, str });
     }
-    buckets.sort((a, b) => b.y - a.y);
+    
+    // Re-sort lines from top to bottom
+    linesList.sort((a, b) => b.y - a.y);
+    
     let pageText = "";
-    for (const b of buckets) {
-      const lineStr = b.items
+    for (const line of linesList) {
+      // Sort items within the same line from left to right (x ascending)
+      const lineStr = line.items
         .sort((a, b) => a.x - b.x)
         .map((it) => it.str)
         .join(" ");

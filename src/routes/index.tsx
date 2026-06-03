@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { extractData, categorize, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
@@ -9,9 +9,6 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
   clearAllCloudData,
-  fixHistoricLojasClaroFozCategory,
-  fixOnlinePurchasesByCity,
-  recategorizeAllTransactions,
   renameCategoryInCloud,
   removeSourceFromCloud,
   syncLocalDataToCloud,
@@ -106,6 +103,13 @@ function Index() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<string>("Local");
 
+  // Refs to always access the latest state inside async callbacks / intervals
+  // without stale closure issues
+  const txsRef = useRef<RawTransaction[]>([]);
+  const summariesRef = useRef<Record<string, InvoiceSummary>>({});
+  const categoriesRef = useRef<string[]>(DEFAULT_CATEGORIES);
+  const userRef = useRef<User | null>(null);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -193,18 +197,25 @@ function Index() {
     restoreSession();
   }, []);
 
-  // Persist to localStorage
+  // Keep refs in sync so async callbacks always see latest state
   useEffect(() => {
+    txsRef.current = txs;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(txs));
   }, [txs]);
 
   useEffect(() => {
+    categoriesRef.current = categoriesList;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoriesList));
   }, [categoriesList]);
 
   useEffect(() => {
+    summariesRef.current = summaries;
     localStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries));
   }, [summaries]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Sincronização automática periódica (a cada 60s) se logado
   useEffect(() => {
@@ -226,24 +237,18 @@ function Index() {
     setBusy(true);
     setError(null);
     try {
-      // These background migrations are commented out to prevent overriding user manual category assignments
-      // await fixHistoricLojasClaroFozCategory(userId);
-      // await fixOnlinePurchasesByCity(userId);
-      // await recategorizeAllTransactions(userId);
-      
-      console.log("Categorias locais ANTES de sincronizar:", categoriesList);
-      
-      const cloud = await syncLocalDataToCloud(userId, txs, categoriesList, summaries, DEFAULT_CATEGORIES);
-      
-      console.log("Categorias do Supabase após sincronizar:", cloud.customCategories);
+      // Always read from refs so we never use stale closure state
+      const currentTxs = txsRef.current;
+      const currentCats = categoriesRef.current;
+      const currentSums = summariesRef.current;
+
+      const cloud = await syncLocalDataToCloud(userId, currentTxs, currentCats, currentSums, DEFAULT_CATEGORIES);
       
       const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);
       setTxs(normalizedTxs);
       setSummaries(cloud.summaries);
       
-      const mergedCats = mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories);
-      console.log("Categorias FINAIS após merge:", mergedCats);
-      
+      const mergedCats = mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories);
       setCategoriesList(mergedCats);
       setCloudStatus("Dados sincronizados com a nuvem");
     } catch (err: any) {
@@ -264,60 +269,85 @@ function Index() {
     setBusy(true);
     setError(null);
     try {
+      // Always read from ref to avoid stale closure (e.g. auto-sync may have updated txs)
+      const currentTxs = txsRef.current;
+      const currentSums = summariesRef.current;
+      const currentCats = categoriesRef.current;
+
       const all: RawTransaction[] = [];
       const newSummaries: Record<string, InvoiceSummary> = {};
       const alreadyImported: string[] = [];
+      // Track sources that were reimported so we can strip old records
+      const reimportedSources = new Set<string>();
 
       for (const f of files) {
-        // Check both local state and what's actually in localStorage for this source
-        const existingTxCount = txs.filter((t) => t.source === f.name).length;
-
         const extracted = await extractData(f);
         if (extracted.summary) {
           newSummaries[f.name] = extracted.summary;
         }
 
-        // Only block reimport if the file already has transactions saved.
-        // A file with a summary but ZERO transactions is a broken/incomplete import
-        // and must always be allowed to reimport to repair itself.
-        if (existingTxCount > 0) {
-          alreadyImported.push(f.name);
+        const existingTxCount = currentTxs.filter((t) => t.source === f.name).length;
+
+        if (extracted.transactions.length === 0) {
+          // PDF extracted nothing — warn but don't silently swallow
+          if (existingTxCount === 0) {
+            // No existing records and nothing new — truly empty or unrecognised layout
+            if (!extracted.summary) {
+              setError(`Nenhum lançamento foi reconhecido em: ${f.name}. O layout pode estar fora dos padrões suportados, ou o arquivo é uma imagem escaneada.`);
+            }
+          }
+          // If there were existing records, keep them as-is (don't strip on failed re-extract)
           continue;
+        }
+
+        if (existingTxCount > 0) {
+          // File already has transactions in state.
+          // Treat as a deliberate reimport: strip old records for this source
+          // and replace with freshly extracted ones to avoid ghost duplicates.
+          reimportedSources.add(f.name);
         }
 
         all.push(...extracted.transactions);
       }
 
+      // Build the updated transaction list:
+      // 1. Keep all existing txs EXCEPT those from reimported sources
+      // 2. Add freshly extracted txs (deduplicated against what remains)
+      const keptTxs = currentTxs.filter((t) => !reimportedSources.has(t.source));
+      const keptKeys = new Set(keptTxs.map(txKey));
+      const newUnique = all.filter((t) => !keptKeys.has(txKey(t)));
+      const updatedTxs = [...keptTxs, ...newUnique];
+
+      const updatedSummaries = Object.keys(newSummaries).length > 0
+        ? { ...currentSums, ...newSummaries }
+        : currentSums;
+
       if (alreadyImported.length > 0) {
         setError(
-          `Arquivo(s) já importado(s) anteriormente e ignorado(s) para evitar duplicatas: ${alreadyImported.join(", ")}. ` +
-          `Use "Limpar análise" se quiser reimportar do zero.`
+          `Arquivo(s) já importado(s): ${alreadyImported.join(", ")}. ` +
+          `Use "Limpar análise" se quiser apagar tudo e reimportar do zero.`
         );
       }
 
-      if (!all.length && Object.keys(newSummaries).length === 0 && alreadyImported.length === 0) {
-        setError("Nenhum lançamento foi reconhecido no(s) PDF(s). O layout pode estar fora dos padrões suportados, ou o arquivo é uma imagem escaneada.");
-      }
+      setTxs(updatedTxs);
+      setSummaries(updatedSummaries);
 
-      if (all.length > 0) {
-        const existingKeys = new Set(txs.map(txKey));
-        const newUnique = all.filter((t) => !existingKeys.has(txKey(t)));
-        if (newUnique.length > 0) {
-          setTxs((prev) => [...prev, ...newUnique]);
+      if (userRef.current) {
+        // If we reimported sources, first remove them from cloud to avoid stale ghost records
+        for (const src of reimportedSources) {
+          await removeSourceFromCloud(userRef.current.id, src);
         }
-      }
 
-      if (Object.keys(newSummaries).length > 0) {
-        setSummaries((prev) => ({ ...prev, ...newSummaries }));
-      }
-
-      if (user) {
-        const updatedTxs = [...txs, ...all.filter((t) => !new Set(txs.map(txKey)).has(txKey(t)))];
-        const updatedSummaries = Object.keys(newSummaries).length > 0 ? { ...summaries, ...newSummaries } : summaries;
-        const cloud = await syncLocalDataToCloud(user.id, updatedTxs, categoriesList, updatedSummaries, DEFAULT_CATEGORIES);
-        setTxs(cloud.txs);
+        const cloud = await syncLocalDataToCloud(
+          userRef.current.id,
+          updatedTxs,
+          currentCats,
+          updatedSummaries,
+          DEFAULT_CATEGORIES
+        );
+        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory));
         setSummaries(cloud.summaries);
-        setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, categoriesList, cloud.customCategories));
+        setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories));
         setCloudStatus("Dados sincronizados com a nuvem");
       }
     } catch (e: any) {
@@ -352,14 +382,24 @@ function Index() {
   }
 
   function handleRemoveSource(source: string) {
+    // Update local state immediately
     setTxs((prev) => prev.filter((t) => t.source !== source));
     setSummaries((prev) => {
       const next = { ...prev };
       delete next[source];
       return next;
     });
-    if (user) {
-      removeSourceFromCloud(user.id, source).catch((err: any) => setError(err?.message || "Falha ao remover fonte na nuvem."));
+    // Also update refs right away so that any concurrent async (sync timer, reimport)
+    // sees the removal immediately without waiting for the next render cycle
+    txsRef.current = txsRef.current.filter((t) => t.source !== source);
+    const nextSums = { ...summariesRef.current };
+    delete nextSums[source];
+    summariesRef.current = nextSums;
+
+    if (userRef.current) {
+      removeSourceFromCloud(userRef.current.id, source).catch((err: any) =>
+        setError(err?.message || "Falha ao remover fonte na nuvem.")
+      );
     }
   }
 

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { RawTransaction, InvoiceSummary } from "@/lib/pdfExtract";
+import { extractDateFromFilename, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import {
   aggregateByCategory,
   aggregateByMonth,
@@ -54,12 +54,54 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   const positives = useMemo(() => txs.filter((t) => t.amount > 0), [txs]);
   const months = useMemo(() => {
     const rawMonths = aggregateByMonth(txs);
-    return rawMonths.map(m => {
-      // Find all sources (files) contributing to this month's transactions
-      const sourcesForMonth = Array.from(new Set(
-        txs.filter(t => (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month)
-           .map(t => t.source)
-      ));
+    
+    // 1. Gather all unique months that have summaries
+    const summaryMonths = new Set<string>();
+    for (const src of Object.keys(summaries)) {
+      const tx = txs.find((t) => t.source === src && t.invoiceDueDate);
+      const dueDate = tx?.invoiceDueDate || extractDateFromFilename(src);
+      if (dueDate) {
+        summaryMonths.add(dueDate.slice(0, 7));
+      }
+    }
+    
+    // 2. Build a map of MonthAgg entries, initializing any summary-only months that don't have transactions
+    const monthMap = new Map<string, EnrichedMonth>();
+    for (const m of rawMonths) {
+      monthMap.set(m.month, { ...m });
+    }
+    
+    const MONTH_ABBR = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+    for (const mKey of summaryMonths) {
+      const isValidMonthKey = /^\d{4}-(0[1-9]|1[0-2])$/.test(mKey);
+      if (!isValidMonthKey) continue;
+      
+      if (!monthMap.has(mKey)) {
+        const [yStr, mStr] = mKey.split("-");
+        const mIdx = parseInt(mStr, 10) - 1;
+        const label = `${MONTH_ABBR[mIdx]?.toLowerCase()}/${yStr.slice(2)}`;
+        monthMap.set(mKey, {
+          month: mKey,
+          label,
+          total: 0,
+          count: 0,
+          byCategory: {},
+        });
+      }
+    }
+    
+    // 3. Map entries to merge summary details
+    const mergedMonths = Array.from(monthMap.values()).map(m => {
+      // Find all sources contributing to this month
+      const sourcesForMonth = Array.from(new Set([
+        ...txs.filter(t => (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month)
+           .map(t => t.source),
+        ...Object.keys(summaries).filter(src => {
+          const tx = txs.find((t) => t.source === src && t.invoiceDueDate);
+          const dueDate = tx?.invoiceDueDate || extractDateFromFilename(src);
+          return dueDate ? dueDate.slice(0, 7) === m.month : false;
+        })
+      ]));
       
       let previousBalance = 0;
       let totalAmount = 0;
@@ -89,6 +131,8 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         total: finalTotalAmount
       };
     });
+    
+    return mergedMonths.sort((a, b) => a.month.localeCompare(b.month));
   }, [txs, summaries]);
   const totalFaturasConsolidado = useMemo(() => months.reduce((acc, m) => acc + m.total, 0), [months]);
   const categories = useMemo(() => aggregateByCategory(txs), [txs]);
@@ -122,8 +166,8 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         const tx = txs.find((t) => t.source === source && t.invoiceDueDate);
         if (tx?.invoiceDueDate) return tx.invoiceDueDate;
 
-        const summary = summaries[source];
-        if (summary) return source;
+        const extracted = extractDateFromFilename(source);
+        if (extracted) return extracted;
 
         return "9999-12-31";
       };
