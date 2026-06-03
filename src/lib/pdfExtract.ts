@@ -22,6 +22,7 @@ export interface RawTransaction {
   category: string;
   source: string;
   invoiceDueDate?: string; // ISO yyyy-mm-dd (due date of the invoice)
+  isManualCategory?: boolean;
 }
 
 export interface InvoiceSummary {

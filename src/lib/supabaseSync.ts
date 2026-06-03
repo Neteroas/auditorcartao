@@ -29,7 +29,8 @@ export async function fetchCloudData(userId: string) {
         : undefined,
       category: t.category,
       source: t.source,
-      invoiceDueDate: t.invoice_due_date || undefined
+      invoiceDueDate: t.invoice_due_date || undefined,
+      isManualCategory: t.is_manual_category || false
     }));
 
     // 2. Fetch custom categories
@@ -99,6 +100,26 @@ export async function syncLocalDataToCloud(
 
       const { error } = await supabase.from("card_transactions").insert(txsToInsert);
       if (error) throw error;
+    }
+
+    // 2.b Identify transactions that were manually categorized locally but differ from the cloud
+    const txsToUpdate = localTxs.filter((lt) => {
+      if (!lt.isManualCategory) return false;
+      const ct = cloud.txs.find((c) => txKey(c) === txKey(lt));
+      return ct && ct.category !== lt.category;
+    });
+
+    if (txsToUpdate.length > 0) {
+      console.log("Sincronizando categorizações manuais para o Supabase:", txsToUpdate.length);
+      for (const lt of txsToUpdate) {
+        const ct = cloud.txs.find((c) => txKey(c) === txKey(lt));
+        if (ct) {
+          await supabase
+            .from("card_transactions")
+            .update({ category: lt.category })
+            .match({ user_id: userId, transaction_id: ct.id });
+        }
+      }
     }
 
     // 3. Identify and upload custom categories (excluding defaults)

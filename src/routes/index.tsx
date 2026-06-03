@@ -67,6 +67,7 @@ function fixLocalTransactionCategories(
   customCategories: Set<string> = new Set(),
 ): RawTransaction[] {
   return txs.map((t) => {
+    if (t.isManualCategory) return t;
     // Never overwrite a transaction the user moved into a custom category
     if (customCategories.has(t.category)) return t;
     const recalculatedCategory = categorize(t.description, t.amount);
@@ -130,8 +131,8 @@ function Index() {
           }
           return tx;
         });
-        // Apply the new categorization logic, preserving custom-category assignments
-        loadedTxs = fixLocalTransactionCategories(loadedTxs, customCats);
+        // Apply the new categorization logic to fix categories (commented out to preserve manual categorization)
+        // loadedTxs = fixLocalTransactionCategories(loadedTxs, customCats);
         setTxs(loadedTxs);
       }
     } catch {
@@ -225,10 +226,10 @@ function Index() {
     setBusy(true);
     setError(null);
     try {
-      await fixHistoricLojasClaroFozCategory(userId);
-      // Modificado: agora respeita categorias customizadas
-      await fixOnlinePurchasesByCity(userId);
-      await recategorizeAllTransactions(userId);
+      // These background migrations are commented out to prevent overriding user manual category assignments
+      // await fixHistoricLojasClaroFozCategory(userId);
+      // await fixOnlinePurchasesByCity(userId);
+      // await recategorizeAllTransactions(userId);
       
       console.log("Categorias locais ANTES de sincronizar:", categoriesList);
       
@@ -365,7 +366,7 @@ function Index() {
 
   function handleUpdateCategory(id: string, newCategory: string) {
     setTxs((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
+      prev.map((t) => (t.id === id ? { ...t, category: newCategory, isManualCategory: true } : t))
     );
     if (user) {
       updateTransactionCategoryInCloud(user.id, id, newCategory).catch((err: any) => setError(err?.message || "Falha ao atualizar categoria na nuvem."));
@@ -386,7 +387,7 @@ function Index() {
     if (!trimmed || trimmed === oldName || categoriesList.includes(trimmed)) return;
     setCategoriesList((prev) => prev.map((c) => (c === oldName ? trimmed : c)));
     setTxs((prev) =>
-      prev.map((t) => (t.category === oldName ? { ...t, category: trimmed } : t))
+      prev.map((t) => (t.category === oldName ? { ...t, category: trimmed, isManualCategory: true } : t))
     );
     if (user) {
       renameCategoryInCloud(user.id, oldName, trimmed).catch((err: any) => setError(err?.message || "Falha ao renomear categoria na nuvem."));
