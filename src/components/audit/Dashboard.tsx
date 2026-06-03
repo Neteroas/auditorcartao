@@ -167,6 +167,62 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         </div>
       </div>
 
+      {/* Diagnóstico de Transações */}
+      {(() => {
+        const havanTxs = txs.filter(t => t.description.toUpperCase().includes("HAVAN"));
+        const consorcioTxs = txs.filter(t => t.description.toUpperCase().includes("CONSORCIO"));
+        const comprasLocaisTxs = txs.filter(t => t.category.toLowerCase().includes("compras locais"));
+        
+        if (havanTxs.length > 0 || consorcioTxs.length > 0 || comprasLocaisTxs.length > 0) {
+          return (
+            <div className="mb-8 p-5 rounded-xl border border-primary/20 bg-primary/5 text-xs text-foreground/80 space-y-3 shadow-sm">
+              <p className="font-bold text-primary text-sm">🔍 Diagnóstico de Transações (Debug):</p>
+              {havanTxs.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground">Transações HAVAN encontradas no sistema ({havanTxs.length}):</p>
+                  <ul className="list-disc pl-5 font-mono mt-1 space-y-1">
+                    {havanTxs.map(t => (
+                      <li key={t.id}>
+                        Data: {t.date} | Descrição: "{t.description}" | Valor: {fmtBRL(t.amount)} | Categoria: <span className="font-semibold text-primary">"{t.category}"</span> | Fatura/Fonte: {t.source}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {consorcioTxs.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground">Transações CONSORCIO encontradas no sistema ({consorcioTxs.length}):</p>
+                  <ul className="list-disc pl-5 font-mono mt-1 space-y-1">
+                    {consorcioTxs.map(t => (
+                      <li key={t.id}>
+                        Data: {t.date} | Descrição: "{t.description}" | Valor: {fmtBRL(t.amount)} | Categoria: <span className="font-semibold text-primary">"{t.category}"</span> | Fatura/Fonte: {t.source}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {comprasLocaisTxs.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground">Transações na categoria "Compras Locais" ou similar ({comprasLocaisTxs.length}):</p>
+                  <ul className="list-disc pl-5 font-mono mt-1 space-y-1">
+                    {comprasLocaisTxs.map(t => (
+                      <li key={t.id}>
+                        Data: {t.date} | Descrição: "{t.description}" | Valor: {fmtBRL(t.amount)} | Fatura/Fonte: {t.source}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div className="mb-8 p-5 rounded-xl border border-destructive/20 bg-destructive/5 text-xs text-destructive shadow-sm">
+            <p className="font-bold">⚠️ Diagnóstico: Nenhuma transação contendo "HAVAN", "CONSORCIO" ou na categoria "Compras Locais" foi encontrada no estado atual da aplicação. Se você importou a fatura anteriormente, é provável que ela tenha sido importada apenas como "Resumo" sem carregar as transações individuais devido ao antigo bug do parser.</p>
+          </div>
+        );
+      })()}
+
       {/* ── VISÃO GERAL (KPIs em Cards com Borda Superior) ── */}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-4">
