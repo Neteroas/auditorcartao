@@ -45,7 +45,7 @@ const CHART_COLORS = [
   "oklch(0.68 0.13 120)",
 ];
 
-type Tab = "panorama" | "revisar" | "categorias" | "mensal" | "ranking" | "parcelas" | "insights" | "ledger";
+type Tab = "panorama" | "revisar" | "categorias" | "ranking" | "parcelas" | "insights" | "ledger";
 
 export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAddCategory, onRenameCategory, summaries, onRemoveSource, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
@@ -186,7 +186,6 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
     { id: "panorama",   label: "Panorama",       icon: <BarChart2 className="size-3.5" /> },
     { id: "revisar",    label: "Revisar Fatura",  icon: <ListFilter className="size-3.5" /> },
     { id: "categorias", label: "Categorias",     icon: <Tag className="size-3.5" /> },
-    { id: "mensal",     label: "Mensal",         icon: <Calendar className="size-3.5" /> },
     { id: "ranking",    label: "Ranking",        icon: <TrendingUp className="size-3.5" /> },
     { id: "parcelas",   label: "Parcelas",       icon: <CreditCard className="size-3.5" /> },
     { id: "insights",   label: "Insights",       icon: <Sparkles className="size-3.5" /> },
@@ -359,7 +358,6 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
             onRenameCategory={onRenameCategory}
           />
         )}
-        {tab === "mensal"     && <MonthlyView months={months} />}
         {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} />}
         {tab === "parcelas"   && <FutureView future={future} />}
         {tab === "insights"   && <InsightsView insights={insights} />}
@@ -696,77 +694,6 @@ function CategoriesView({ categories, total, categoriesList, onAddCategory, onRe
   );
 }
 
-/* ── Monthly ── */
-function MonthlyView({ months }: { months: ReturnType<typeof aggregateByMonth> }) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <div className="glass-card p-6">
-        <SectionTitle eyebrow="III·A" title="Volume por mês" />
-        <div className="h-72 mt-5">
-          <ResponsiveContainer>
-            <BarChart data={months} barSize={32}>
-              <CartesianGrid stroke="oklch(0.175 0.025 255 / 0.06)" strokeDasharray="3 4" vertical={false} />
-              <XAxis dataKey="label" stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 500 }} />
-              <YAxis stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<ChartTip />} />
-              <Bar dataKey="total" fill="oklch(0.47 0.21 270)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="glass-card p-6">
-        <SectionTitle eyebrow="III·B" title="Transações por mês" />
-        <div className="h-72 mt-5">
-          <ResponsiveContainer>
-            <BarChart data={months} barSize={32}>
-              <CartesianGrid stroke="oklch(0.175 0.025 255 / 0.06)" strokeDasharray="3 4" vertical={false} />
-              <XAxis dataKey="label" stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 500 }} />
-              <YAxis stroke="oklch(0.50 0.025 255)" tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }} />
-              <Tooltip content={<ChartTip />} />
-              <Bar dataKey="count" fill="oklch(0.54 0.18 295)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="lg:col-span-2 glass-card overflow-hidden">
-        <div className="p-6 border-b border-border/40">
-          <SectionTitle eyebrow="III·C" title="Tabela analítica mensal" />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/30">
-                <th className="text-left px-6 py-3">Mês</th>
-                <th className="text-right px-6 py-3">Lançamentos</th>
-                <th className="text-right px-6 py-3">Total</th>
-                <th className="text-right px-6 py-3">Ticket médio</th>
-                <th className="text-left px-6 py-3">Categoria líder</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/25">
-              {months.map((m: EnrichedMonth) => {
-                const leader = Object.entries(m.byCategory).sort((a, b) => b[1] - a[1])[0];
-                return (
-                  <tr key={m.month} className="hover:bg-primary/[0.02] transition-colors duration-150">
-                    <td className="px-6 py-4 font-semibold text-foreground">{m.label}</td>
-                    <td className="px-6 py-4 text-right tabular text-muted-foreground">{m.count}</td>
-                    <td className="px-6 py-4 text-right tabular font-semibold">{fmtBRL(m.total)}</td>
-                    <td className="px-6 py-4 text-right tabular text-muted-foreground">{fmtBRL((m.originalTotal ?? m.total) / m.count)}</td>
-                    <td className="px-6 py-4">
-                      <span className="pill pill text-[10px]">{leader?.[0]}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ── Ranking ── */
 function RankingView({ biggest, smallest }: { biggest: RawTransaction[]; smallest: RawTransaction[] }) {
