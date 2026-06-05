@@ -396,16 +396,33 @@ export async function extractData(file: File): Promise<ExtractedData> {
     for (const it of sortedItems) {
       const y = it.transform[5];
       const x = it.transform[4];
-      const str = it.str;
-      
-      // Group items with similar y-coordinates (tolerance of 2.0 points)
-      // to resolve sub-pixel baseline offsets without merging closely spaced lines.
-      const Y_TOL = 2.0;
-      let line = linesList.find((l) => Math.abs(l.y - y) <= Y_TOL);
+      const str = typeof it.str === "string" ? it.str.trim() : "";
+      if (!str) continue;
+
+      // Group text using a slightly wider Y tolerance again. The parser used to
+      // work with a 3px bucket and regressed after tightening this to 2px,
+      // which split date / description / amount across separate pseudo-lines.
+      const Y_TOL = 3.0;
+      let line: { y: number; items: { x: number; str: string }[] } | undefined;
+      let closestDiff = Number.POSITIVE_INFINITY;
+
+      for (const existingLine of linesList) {
+        const diff = Math.abs(existingLine.y - y);
+        if (diff <= Y_TOL && diff < closestDiff) {
+          line = existingLine;
+          closestDiff = diff;
+        }
+      }
+
       if (!line) {
         line = { y, items: [] };
         linesList.push(line);
+      } else {
+        // Keep the cluster centered so later items with slight baseline drift
+        // still join the same visual row.
+        line.y = (line.y * line.items.length + y) / (line.items.length + 1);
       }
+
       line.items.push({ x, str });
     }
     

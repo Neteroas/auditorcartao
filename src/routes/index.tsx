@@ -102,6 +102,7 @@ function Index() {
   const [user, setUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<string>("Local");
+  const hasImportedData = txs.length > 0 || Object.keys(summaries).length > 0;
 
   // Refs to always access the latest state inside async callbacks / intervals
   // without stale closure issues
@@ -479,7 +480,7 @@ function Index() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16">
-        {txs.length === 0 ? (
+        {!hasImportedData ? (
           <>
             {/* Hero header */}
             <header className="mb-12">
@@ -529,7 +530,7 @@ function Index() {
                 )}
                 
                 {/* Aviso se não logado */}
-                {!user && supabaseEnabled && txs.length > 0 && (
+                {!user && supabaseEnabled && hasImportedData && (
                   <div className="border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm">
                     <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Dados locais apenas</p>
                     <p className="text-xs text-amber-700/80 mb-3">
@@ -582,7 +583,7 @@ function Index() {
             )}
             
             {/* Aviso se não logado e tem dados */}
-            {!user && supabaseEnabled && txs.length > 0 && (
+            {!user && supabaseEnabled && hasImportedData && (
               <div className="mb-6 border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm">
                 <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Dados locais apenas</p>
                 <p className="text-xs text-amber-700/80 mb-3">
