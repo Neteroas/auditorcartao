@@ -9,6 +9,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
   clearAllCloudData,
+  deduplicateCloudTransactions,
   renameCategoryInCloud,
   removeSourceFromCloud,
   syncLocalDataToCloud,
@@ -110,6 +111,8 @@ function Index() {
   const summariesRef = useRef<Record<string, InvoiceSummary>>({});
   const categoriesRef = useRef<string[]>(DEFAULT_CATEGORIES);
   const userRef = useRef<User | null>(null);
+  // Tracks whether the one-time dedup has already run this session
+  const dedupDoneRef = useRef<boolean>(false);
 
   useEffect(() => {
     try {
@@ -238,11 +241,23 @@ function Index() {
     setBusy(true);
     setError(null);
     try {
+      // Run dedup exactly once per session (cleans up ghosts created by the
+      // old 1000-row pagination bug without repeated overhead on every 60s tick)
+      if (!dedupDoneRef.current) {
+        dedupDoneRef.current = true;
+        setCloudStatus("Verificando duplicatas na nuvem...");
+        const { removed } = await deduplicateCloudTransactions(userId);
+        if (removed > 0) {
+          console.log(`[sync] Dedup removeu ${removed} lançamentos duplicados.`);
+        }
+      }
+
       // Always read from refs so we never use stale closure state
       const currentTxs = txsRef.current;
       const currentCats = categoriesRef.current;
       const currentSums = summariesRef.current;
 
+      setCloudStatus("Sincronizando com a nuvem...");
       const cloud = await syncLocalDataToCloud(userId, currentTxs, currentCats, currentSums, DEFAULT_CATEGORIES);
       
       const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);

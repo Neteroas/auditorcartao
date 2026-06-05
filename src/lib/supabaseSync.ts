@@ -47,6 +47,69 @@ async function fetchAllTransactions(userId: string): Promise<RawTransaction[]> {
   }));
 }
 
+/**
+ * Remove duplicate transactions from Supabase.
+ * Groups all rows by the canonical txKey (source|date|description|amount).
+ * For each group with > 1 row, keeps the earliest (created_at ASC) and
+ * deletes the rest using the DB primary key `id`.
+ * Returns the number of rows removed.
+ */
+export async function deduplicateCloudTransactions(userId: string): Promise<{ removed: number }> {
+  const PAGE_SIZE = 1000;
+  const allRows: { id: string; source: string; date: string; description: string; amount: number }[] = [];
+  let from = 0;
+
+  // Fetch only the columns needed for dedup (much lighter than full *)
+  while (true) {
+    const { data, error } = await supabase
+      .from("card_transactions")
+      .select("id, source, date, description, amount")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true }) // keep the earliest
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  if (allRows.length === 0) return { removed: 0 };
+
+  // Group by txKey; the first occurrence (already ordered by created_at) is the keeper
+  const seen = new Set<string>();
+  const toDelete: string[] = [];
+
+  for (const row of allRows) {
+    const key = `${row.source}|${row.date}|${String(row.description).toLowerCase().slice(0, 40)}|${Number(row.amount).toFixed(2)}`;
+    if (seen.has(key)) {
+      toDelete.push(row.id); // duplicate — mark for deletion
+    } else {
+      seen.add(key);
+    }
+  }
+
+  if (toDelete.length === 0) return { removed: 0 };
+
+  console.log(`[dedup] Removendo ${toDelete.length} transações duplicadas da nuvem…`);
+
+  // Delete in batches of 200 (Supabase .in() limit)
+  const BATCH = 200;
+  for (let i = 0; i < toDelete.length; i += BATCH) {
+    const { error } = await supabase
+      .from("card_transactions")
+      .delete()
+      .in("id", toDelete.slice(i, i + BATCH))
+      .eq("user_id", userId);
+
+    if (error) throw error;
+  }
+
+  console.log(`[dedup] ${toDelete.length} duplicatas removidas com sucesso.`);
+  return { removed: toDelete.length };
+}
+
 /** Fetch all data from Supabase for a specific user */
 export async function fetchCloudData(userId: string) {
   try {
