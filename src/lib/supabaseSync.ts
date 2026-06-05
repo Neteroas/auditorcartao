@@ -6,32 +6,52 @@ function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
 }
 
-/** Fetch all data from Supabase for a specific user */
-export async function fetchCloudData(userId: string) {
-  try {
-    // 1. Fetch transactions
-    const { data: txsData, error: txsErr } = await supabase
+/** Fetch ALL transactions from Supabase with pagination (Supabase default limit is 1000 rows).
+ * Iterates in batches of 1000 until no more rows are returned. */
+async function fetchAllTransactions(userId: string): Promise<RawTransaction[]> {
+  const PAGE_SIZE = 1000;
+  const allRows: any[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
       .from("card_transactions")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
 
-    if (txsErr) throw txsErr;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
 
-    // Map database columns back to camelCase RawTransaction interface
-    const txs: RawTransaction[] = (txsData || []).map((t: any) => ({
-      id: t.transaction_id,
-      date: t.date,
-      description: t.description,
-      amount: Number(t.amount),
-      installment: t.installment_current && t.installment_total 
+    allRows.push(...data);
+
+    // If we got fewer rows than PAGE_SIZE, we've reached the end
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allRows.map((t: any) => ({
+    id: t.transaction_id,
+    date: t.date,
+    description: t.description,
+    amount: Number(t.amount),
+    installment:
+      t.installment_current && t.installment_total
         ? { current: t.installment_current, total: t.installment_total }
         : undefined,
-      category: t.category,
-      source: t.source,
-      invoiceDueDate: t.invoice_due_date || undefined,
-      isManualCategory: t.is_manual_category || false
-    }));
+    category: t.category,
+    source: t.source,
+    invoiceDueDate: t.invoice_due_date || undefined,
+    isManualCategory: t.is_manual_category || false,
+  }));
+}
+
+/** Fetch all data from Supabase for a specific user */
+export async function fetchCloudData(userId: string) {
+  try {
+    // 1. Fetch ALL transactions (paginated to bypass the default 1000-row limit)
+    const txs = await fetchAllTransactions(userId);
 
     // 2. Fetch custom categories
     const { data: catsData, error: catsErr } = await supabase
@@ -58,7 +78,7 @@ export async function fetchCloudData(userId: string) {
         localPurchases: Number(s.local_purchases),
         intlPurchases: Number(s.intl_purchases),
         feesAndCharges: Number(s.fees_and_charges),
-        totalAmount: Number(s.total_amount)
+        totalAmount: Number(s.total_amount),
       };
     }
 
@@ -95,11 +115,18 @@ export async function syncLocalDataToCloud(
         installment_total: t.installment?.total || null,
         category: t.category,
         source: t.source,
-        invoice_due_date: t.invoiceDueDate || null
+        invoice_due_date: t.invoiceDueDate || null,
+        is_manual_category: t.isManualCategory || false,
       }));
 
-      const { error } = await supabase.from("card_transactions").insert(txsToInsert);
-      if (error) throw error;
+      // Insert in batches of 500 to avoid request size limits
+      const BATCH = 500;
+      for (let i = 0; i < txsToInsert.length; i += BATCH) {
+        const { error } = await supabase
+          .from("card_transactions")
+          .insert(txsToInsert.slice(i, i + BATCH));
+        if (error) throw error;
+      }
     }
 
     // 2.b Identify transactions that were manually categorized locally but differ from the cloud
@@ -184,11 +211,18 @@ export async function uploadTransactionsToCloud(
         installment_total: t.installment?.total || null,
         category: t.category,
         source: t.source,
-        invoice_due_date: t.invoiceDueDate || null
+        invoice_due_date: t.invoiceDueDate || null,
+        is_manual_category: t.isManualCategory || false,
       }));
 
-      const { error } = await supabase.from("card_transactions").insert(txsToInsert);
-      if (error) throw error;
+      // Insert in batches of 500 to avoid request size limits
+      const BATCH = 500;
+      for (let i = 0; i < txsToInsert.length; i += BATCH) {
+        const { error } = await supabase
+          .from("card_transactions")
+          .insert(txsToInsert.slice(i, i + BATCH));
+        if (error) throw error;
+      }
     }
 
     const sumKeys = Object.keys(summaries);

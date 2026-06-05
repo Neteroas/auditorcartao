@@ -45,6 +45,7 @@ create table if not exists public.card_transactions (
     category text not null,
     source text not null, -- Nome do arquivo PDF de origem
     invoice_due_date text,
+    is_manual_category boolean not null default false, -- Indica se o usuário alterou a categoria manualmente
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
