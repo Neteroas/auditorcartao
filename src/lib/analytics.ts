@@ -63,7 +63,7 @@ export interface MonthAgg {
 export function aggregateByMonth(txs: RawTransaction[]): MonthAgg[] {
   const map = new Map<string, MonthAgg>();
   for (const t of txs) {
-    if (t.amount < 0) continue;
+    if (t.amount < 0 || t.category === "Pagamentos/Créditos") continue;
     // Validate invoiceDueDate: must be YYYY-MM format with month 01-12
     const rawM = t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : null;
     const isValidInvoice = rawM ? /^\d{4}-(0[1-9]|1[0-2])$/.test(rawM) : false;
@@ -88,7 +88,7 @@ export function aggregateByMonth(txs: RawTransaction[]): MonthAgg[] {
 export function aggregateByCategory(txs: RawTransaction[]) {
   const map = new Map<string, { category: string; total: number; count: number }>();
   for (const t of txs) {
-    if (t.amount < 0) continue;
+    if (t.amount < 0 || t.category === "Pagamentos/Créditos") continue;
     const prev = map.get(t.category) || { category: t.category, total: 0, count: 0 };
     prev.total += t.amount;
     prev.count++;
@@ -148,7 +148,7 @@ export function generateInsights(txs: RawTransaction[]): Insight[] {
   const insights: Insight[] = [];
   if (!txs.length) return insights;
 
-  const positives = txs.filter((t) => t.amount > 0);
+  const positives = txs.filter((t) => t.amount > 0 && t.category !== "Pagamentos/Créditos");
   const total = positives.reduce((s, t) => s + t.amount, 0);
   const avg = total / positives.length;
 

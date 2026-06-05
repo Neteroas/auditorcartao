@@ -51,7 +51,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   const [tab, setTab] = useState<Tab>("panorama");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
-  const positives = useMemo(() => txs.filter((t) => t.amount > 0), [txs]);
+  const positives = useMemo(() => txs.filter((t) => t.amount > 0 && t.category !== "Pagamentos/Créditos"), [txs]);
   const months = useMemo(() => {
     const rawMonths = aggregateByMonth(txs);
     
@@ -116,8 +116,14 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         }
       }
 
-      const monthNegatives = txs.filter(t => t.amount < 0 && (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month);
-      const creditsTotal = monthNegatives.reduce((acc, t) => acc + t.amount, 0);
+      const monthNegatives = txs.filter(t => 
+        (t.amount < 0 || t.category === "Pagamentos/Créditos") && 
+        (t.invoiceDueDate ? t.invoiceDueDate.slice(0, 7) : "Outros") === m.month
+      );
+      const creditsTotal = monthNegatives.reduce((acc, t) => {
+        const val = t.amount < 0 ? t.amount : -t.amount;
+        return acc + val;
+      }, 0);
 
       const finalTotalAmount = hasSummary ? totalAmount : (m.total + creditsTotal);
 
@@ -982,7 +988,10 @@ function RevisarView({
 
   const totalFatura = useMemo(() => {
     const prevBal = activeSummary?.previousBalance || 0;
-    return prevBal + filtered.reduce((s, t) => s + t.amount, 0);
+    return prevBal + filtered.reduce((s, t) => {
+      const val = t.category === "Pagamentos/Créditos" ? (t.amount > 0 ? -t.amount : t.amount) : t.amount;
+      return s + val;
+    }, 0);
   }, [filtered, activeSummary]);
 
   const totalJurosFat = useMemo(() => {
@@ -990,11 +999,14 @@ function RevisarView({
   }, [filtered]);
 
   const totalCreditosFat = useMemo(() => {
-    return filtered.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+    return filtered.filter((t) => t.amount < 0 || t.category === "Pagamentos/Créditos").reduce((s, t) => {
+      const val = t.amount < 0 ? t.amount : -t.amount;
+      return s + val;
+    }, 0);
   }, [filtered]);
 
   const totalComprasFat = useMemo(() => {
-    return filtered.filter((t) => t.amount > 0 && t.category !== "Tarifas").reduce((s, t) => s + t.amount, 0);
+    return filtered.filter((t) => t.amount > 0 && t.category !== "Tarifas" && t.category !== "Pagamentos/Créditos").reduce((s, t) => s + t.amount, 0);
   }, [filtered]);
 
   // Get invoice due date for display
@@ -1179,9 +1191,9 @@ function RevisarView({
                               </select>
                             </td>
                             <td className={`px-5 py-2.5 text-right tabular font-700 font-mono ${
-                              t.amount < 0 ? "text-emerald-600" : isTarifa ? "text-destructive" : "text-foreground"
+                              t.amount < 0 || t.category === "Pagamentos/Créditos" ? "text-emerald-600" : isTarifa ? "text-destructive" : "text-foreground"
                             }`}>
-                              {fmtBRL(t.amount)}
+                              {fmtBRL(t.category === "Pagamentos/Créditos" && t.amount > 0 ? -t.amount : t.amount)}
                             </td>
                           </tr>
                         ))}
