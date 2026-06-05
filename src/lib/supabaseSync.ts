@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { RawTransaction, InvoiceSummary } from "./pdfExtract";
+import { sanitizeTransaction, type RawTransaction, type InvoiceSummary } from "./pdfExtract";
 
 // Guarantee a unique transaction key for matching
 function txKey(t: RawTransaction): string {
@@ -31,20 +31,37 @@ async function fetchAllTransactions(userId: string): Promise<RawTransaction[]> {
     from += PAGE_SIZE;
   }
 
-  return allRows.map((t: any) => ({
-    id: t.transaction_id,
-    date: t.date,
-    description: t.description,
-    amount: Number(t.amount),
-    installment:
-      t.installment_current && t.installment_total
-        ? { current: t.installment_current, total: t.installment_total }
-        : undefined,
-    category: t.category,
-    source: t.source,
-    invoiceDueDate: t.invoice_due_date || undefined,
-    isManualCategory: t.is_manual_category || false,
-  }));
+  return allRows.map((t: any) => {
+    const rawTx: RawTransaction = {
+      id: t.transaction_id,
+      date: t.date,
+      description: t.description,
+      amount: Number(t.amount),
+      installment:
+        t.installment_current && t.installment_total
+          ? { current: t.installment_current, total: t.installment_total }
+          : undefined,
+      category: t.category,
+      source: t.source,
+      invoiceDueDate: t.invoice_due_date || undefined,
+      isManualCategory: t.is_manual_category || false,
+    };
+    const sanitized = sanitizeTransaction(rawTx);
+    if (sanitized.amount !== rawTx.amount || sanitized.description !== rawTx.description) {
+      console.log(`[sync] Corrigindo transação corrompida na nuvem: ${sanitized.id} (${sanitized.description})`);
+      supabase
+        .from("card_transactions")
+        .update({
+          description: sanitized.description,
+          amount: sanitized.amount
+        })
+        .match({ user_id: userId, transaction_id: sanitized.id })
+        .then(({ error }) => {
+          if (error) console.error("Erro ao atualizar transação corrigida na nuvem:", error);
+        });
+    }
+    return sanitized;
+  });
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { extractData, categorize, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
+import { extractData, categorize, sanitizeTransaction, type RawTransaction, type InvoiceSummary } from "@/lib/pdfExtract";
 import { UploadDropzone } from "@/components/audit/UploadDropzone";
 import { Dashboard } from "@/components/audit/Dashboard";
 import { AuthModal } from "@/components/audit/AuthModal";
@@ -129,7 +129,7 @@ function Index() {
         } catch {}
 
         let loadedTxs = JSON.parse(raw);
-        loadedTxs = loadedTxs.map((t: any) => {
+        loadedTxs = loadedTxs.map(sanitizeTransaction).map((t: any) => {
           let tx = t;
           if (tx.category === "Mercado") {
             tx = { ...tx, category: "Mercados / Panificadoras" };
@@ -260,7 +260,7 @@ function Index() {
       setCloudStatus("Sincronizando com a nuvem...");
       const cloud = await syncLocalDataToCloud(userId, currentTxs, currentCats, currentSums, DEFAULT_CATEGORIES);
       
-      const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory);
+      const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction);
       setTxs(normalizedTxs);
       setSummaries(cloud.summaries);
       
@@ -361,7 +361,7 @@ function Index() {
           updatedSummaries,
           DEFAULT_CATEGORIES
         );
-        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory));
+        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction));
         setSummaries(cloud.summaries);
         setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories));
         setCloudStatus("Dados sincronizados com a nuvem");

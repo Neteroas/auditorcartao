@@ -514,7 +514,15 @@ export async function extractData(file: File): Promise<ExtractedData> {
     const startsWithDate = BLOCK_START_RE.test(line);
     if (startsWithDate) {
       flushBlock();
-      currentBlock = line;
+      // If the line already has a date and a valid BRL amount, it is complete.
+      // We push it as a block directly and don't let subsequent lines append to it.
+      AMOUNT_GLOBAL_RE.lastIndex = 0;
+      if (AMOUNT_GLOBAL_RE.test(line)) {
+        blocks.push(line);
+        currentBlock = "";
+      } else {
+        currentBlock = line;
+      }
       continue;
     }
 
@@ -554,3 +562,24 @@ export async function extractData(file: File): Promise<ExtractedData> {
 
   return { transactions, summary };
 }
+
+export function sanitizeTransaction(t: RawTransaction): RawTransaction {
+  const desc = t.description.trim();
+  const match = desc.match(/(?:R\$\s*)?(\d+(?:\.\d{3})*,\d{2})$/i);
+  if (match) {
+    const rawVal = match[1];
+    const cleanVal = rawVal.replace(/\./g, "").replace(",", ".");
+    const parsedAmount = parseFloat(cleanVal);
+    if (!isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount !== t.amount) {
+      const idx = desc.lastIndexOf(match[0]);
+      const cleanDesc = desc.substring(0, idx).trim();
+      return {
+        ...t,
+        description: cleanDesc || t.description,
+        amount: parsedAmount
+      };
+    }
+  }
+  return t;
+}
+
