@@ -565,13 +565,19 @@ export async function extractData(file: File): Promise<ExtractedData> {
 
 export function sanitizeTransaction(t: RawTransaction): RawTransaction {
   const desc = t.description.trim();
-  const match = desc.match(/(?:R\$\s*)?(\d+(?:\.\d{3})*,\d{2})$/i);
+  // 1. Try to find "R$ XX,XX" anywhere in the description
+  let match = desc.match(/R\$\s*(\d+(?:\.\d{3})*,\d{2})/i);
+  // 2. Fallback to matching any "XX,XX" at the very end of the description
+  if (!match) {
+    match = desc.match(/(\d+(?:\.\d{3})*,\d{2})$/i);
+  }
+  
   if (match) {
     const rawVal = match[1];
     const cleanVal = rawVal.replace(/\./g, "").replace(",", ".");
     const parsedAmount = parseFloat(cleanVal);
     if (!isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount !== t.amount) {
-      const idx = desc.lastIndexOf(match[0]);
+      const idx = desc.indexOf(match[0]);
       const cleanDesc = desc.substring(0, idx).trim();
       return {
         ...t,
