@@ -1325,6 +1325,9 @@ function RevisarView({
   const activeSummary = summaries ? summaries[activeSource] : undefined;
 
   const totalFatura = useMemo(() => {
+    if (activeSummary?.totalAmount && activeSummary.totalAmount > 0) {
+      return activeSummary.totalAmount;
+    }
     const prevBal = activeSummary?.previousBalance || 0;
     return prevBal + filtered.reduce((s, t) => {
       const val = t.category === "Pagamentos/Créditos" ? (t.amount > 0 ? -t.amount : t.amount) : t.amount;
