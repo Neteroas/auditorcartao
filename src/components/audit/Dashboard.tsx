@@ -309,7 +309,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
           <KpiTopBorder
             label="Transporte"
             value={fmtBRL(totalTrans)}
-            sub="Uber, gasolina, etc."
+            sub="Uber, 99app."
             color="oklch(0.35 0.05 250)"
             valueColor="text-slate-700"
             icon={Car}
