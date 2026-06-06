@@ -626,3 +626,59 @@ export async function recategorizeAllTransactions(userId: string) {
     throw err;
   }
 }
+
+/**
+ * Bulk-recategorize all transactions whose description starts with "UBER*" or "99APP*"
+ * to the "Transporte" category.
+ * Respects is_manual_category = true (never overwrites user's explicit choices).
+ * Returns the number of rows updated.
+ */
+export async function bulkRecategorizeTransport(userId: string): Promise<{ updated: number }> {
+  try {
+    // Fetch all transactions that are NOT already "Transporte" and NOT manually categorized
+    const { data: txsData, error: fetchErr } = await supabase
+      .from("card_transactions")
+      .select("id, description, category, is_manual_category")
+      .eq("user_id", userId)
+      .neq("category", "Transporte");
+
+    if (fetchErr) throw fetchErr;
+    if (!txsData || txsData.length === 0) return { updated: 0 };
+
+    // Filter locally: match UBER* or 99APP* patterns (case-insensitive)
+    const TRANSPORT_PATTERN = /^(uber\s*\*|99\s*app\s*\*|99app)/i;
+
+    const toUpdate = txsData.filter((tx: any) => {
+      if (tx.is_manual_category) return false; // preserve manual choices
+      return TRANSPORT_PATTERN.test(tx.description?.trim() ?? "");
+    });
+
+    if (toUpdate.length === 0) {
+      console.log("[bulkTransport] Nenhuma transação encontrada para recategorizar.");
+      return { updated: 0 };
+    }
+
+    console.log(`[bulkTransport] Recategorizando ${toUpdate.length} transações para "Transporte"…`);
+
+    // Update in batches of 200
+    const BATCH = 200;
+    let updated = 0;
+    for (let i = 0; i < toUpdate.length; i += BATCH) {
+      const ids = toUpdate.slice(i, i + BATCH).map((tx: any) => tx.id);
+      const { error: updateErr } = await supabase
+        .from("card_transactions")
+        .update({ category: "Transporte", is_manual_category: true })
+        .in("id", ids)
+        .eq("user_id", userId);
+
+      if (updateErr) throw updateErr;
+      updated += ids.length;
+    }
+
+    console.log(`[bulkTransport] ${updated} transações recategorizadas com sucesso.`);
+    return { updated };
+  } catch (err) {
+    console.error("Erro ao recategorizar transações de transporte:", err);
+    throw err;
+  }
+}

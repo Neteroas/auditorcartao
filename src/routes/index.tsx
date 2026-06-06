@@ -8,6 +8,7 @@ import { AuthModal } from "@/components/audit/AuthModal";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
+  bulkRecategorizeTransport,
   clearAllCloudData,
   deduplicateCloudTransactions,
   renameCategoryInCloud,
@@ -249,6 +250,13 @@ function Index() {
         const { removed } = await deduplicateCloudTransactions(userId);
         if (removed > 0) {
           console.log(`[sync] Dedup removeu ${removed} lançamentos duplicados.`);
+        }
+
+        // Recategorize UBER* and 99APP* transactions to "Transporte" (one-time per session)
+        setCloudStatus("Corrigindo categorias de transporte...");
+        const { updated: transportUpdated } = await bulkRecategorizeTransport(userId);
+        if (transportUpdated > 0) {
+          console.log(`[sync] ${transportUpdated} transações recategorizadas para "Transporte".`);
         }
       }
 
