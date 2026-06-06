@@ -191,6 +191,9 @@ function createTransactionCandidate(
     .replace(/\s{2,}/g, " ")
     .replace(/^[\-–—:;|]+\s*/, "")
     .replace(/\s+[\-–—:;|]+$/, "")
+    // Strip a leading "DD/MM" or "DD/MM/YY(YY)" that some PDFs prepend when
+    // the lançamento has two date columns (data compra + data lançamento).
+    .replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?\s+/, "")
     .trim();
 
   if (!description || description.length < 2) return null;
