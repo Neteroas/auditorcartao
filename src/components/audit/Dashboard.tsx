@@ -301,7 +301,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
           <KpiTopBorder
             label="Alimentação"
             value={fmtBRL(totalAlim)}
-            sub="iFood e Restaurantes"
+            sub="Ifood"
             color="oklch(0.55 0.16 155)"
             valueColor="text-teal-600"
             icon={Utensils}
