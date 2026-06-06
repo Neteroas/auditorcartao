@@ -187,17 +187,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   }, [txs, summaries]);
 
   const [selectedSource, setSelectedSource] = useState<string>("");
-  // Handler to navigate from Ranking to Revisar view for a specific transaction
-  const handleTransactionSelect = (tx: RawTransaction) => {
-    // Set the active source (invoice) and switch to the review tab
-    setSelectedSource(tx.source);
-    setTab("revisar");
-    // Optional: set hash to scroll to transaction after view changes
-    const hash = `#tx-${tx.id}`;
-    if (typeof window !== "undefined") {
-      window.location.hash = hash;
-    }
-  };
+
   const activeSource = selectedSource || invoiceSources[0] || "";
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
