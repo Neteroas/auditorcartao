@@ -682,3 +682,34 @@ export async function bulkRecategorizeTransport(userId: string): Promise<{ updat
     throw err;
   }
 }
+
+/**
+ * Bulk-update the category (and mark as manual) for a specific list of
+ * transaction_id values. Used when the user opts to propagate a manual
+ * category change to similar transactions across all invoices.
+ */
+export async function bulkUpdateCategoryByIds(
+  userId: string,
+  transactionIds: string[],
+  category: string
+): Promise<{ updated: number }> {
+  if (transactionIds.length === 0) return { updated: 0 };
+
+  const BATCH = 200;
+  let updated = 0;
+
+  for (let i = 0; i < transactionIds.length; i += BATCH) {
+    const batch = transactionIds.slice(i, i + BATCH);
+    const { error } = await supabase
+      .from("card_transactions")
+      .update({ category, is_manual_category: true })
+      .in("transaction_id", batch)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+    updated += batch.length;
+  }
+
+  console.log(`[propagate] ${updated} lançamentos similares atualizados para "${category}".`);
+  return { updated };
+}

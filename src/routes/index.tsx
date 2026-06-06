@@ -9,6 +9,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
   bulkRecategorizeTransport,
+  bulkUpdateCategoryByIds,
   clearAllCloudData,
   deduplicateCloudTransactions,
   renameCategoryInCloud,
@@ -16,6 +17,7 @@ import {
   syncLocalDataToCloud,
   updateTransactionCategoryInCloud,
 } from "@/lib/supabaseSync";
+import { extractDateFromFilename } from "@/lib/pdfExtract";
 import { ShieldCheck, Cpu, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/")(
@@ -83,6 +85,27 @@ function txKey(t: RawTransaction): string {
   return `${t.source}|${t.date}|${t.description.toLowerCase().slice(0, 40)}|${t.amount.toFixed(2)}`;
 }
 
+/**
+ * Normaliza a descrição de um lançamento para identificar o mesmo
+ * estabelecimento entre faturas diferentes, ignorando códigos de pedido/cliente.
+ * Ex: "TIM*TIM 459997617" e "TIM*TIM 123456789" → "tim*tim"
+ */
+function descriptionKey(desc: string): string {
+  return desc
+    .toLowerCase()
+    .replace(/\d{4,}/g, '')      // remove sequências de 4+ dígitos (códigos de pedido)
+    .replace(/[^a-záàâãéèêíïóôõöúüç\*]/g, ' ')  // mantém letras e *
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 35);
+}
+
+interface PropagationData {
+  newCategory: string;
+  merchantLabel: string;   // descrição legível para o modal
+  similarTxs: RawTransaction[];
+}
+
 function mergeCategories(
   defaultCategories: string[],
   localCategories: string[],
@@ -97,6 +120,7 @@ function mergeCategories(
 
 function Index() {
   const [txs, setTxs] = useState<RawTransaction[]>([]);
+  const [confirmPropagation, setConfirmPropagation] = useState<PropagationData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -428,12 +452,60 @@ function Index() {
   }
 
   function handleUpdateCategory(id: string, newCategory: string) {
+    // Find the transaction before updating state (txsRef.current is still pre-update here)
+    const changedTx = txsRef.current.find((t) => t.id === id);
+
+    // 1. Apply the change to this transaction immediately
     setTxs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, category: newCategory, isManualCategory: true } : t))
     );
     if (user) {
-      updateTransactionCategoryInCloud(user.id, id, newCategory).catch((err: any) => setError(err?.message || "Falha ao atualizar categoria na nuvem."));
+      updateTransactionCategoryInCloud(user.id, id, newCategory).catch((err: any) =>
+        setError(err?.message || "Falha ao atualizar categoria na nuvem.")
+      );
     }
+
+    if (!changedTx) return;
+
+    // 2. Find similar transactions across all invoices (same merchant, different category)
+    const key = descriptionKey(changedTx.description);
+    if (!key || key.length < 2) return;
+
+    const similar = txsRef.current.filter((t) => {
+      if (t.id === id) return false;              // skip the one we just changed
+      if (t.category === newCategory) return false; // already correct
+      // Don't override another manual choice that was set to a *different* category
+      if (t.isManualCategory && t.category !== changedTx.category) return false;
+      return descriptionKey(t.description) === key;
+    });
+
+    if (similar.length > 0) {
+      setConfirmPropagation({
+        newCategory,
+        merchantLabel: changedTx.description,
+        similarTxs: similar,
+      });
+    }
+  }
+
+  function applyPropagation() {
+    if (!confirmPropagation) return;
+    const { newCategory, similarTxs } = confirmPropagation;
+    const ids = similarTxs.map((t) => t.id);
+
+    setTxs((prev) =>
+      prev.map((t) =>
+        ids.includes(t.id) ? { ...t, category: newCategory, isManualCategory: true } : t
+      )
+    );
+
+    if (user) {
+      bulkUpdateCategoryByIds(user.id, ids, newCategory).catch((err: any) =>
+        setError(err?.message || "Falha ao propagar categoria na nuvem.")
+      );
+    }
+
+    setConfirmPropagation(null);
   }
 
   function handleAddCategory(name: string) {
@@ -656,6 +728,165 @@ function Index() {
       </div>
 
       {showAuthModal && <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />}
+      {confirmPropagation && (
+        <PropagationModal
+          data={confirmPropagation}
+          summaries={summaries}
+          txs={txs}
+          onApplyAll={applyPropagation}
+          onKeepOne={() => setConfirmPropagation(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Propagation Modal ── */
+const MONTH_ABBR_PT = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+
+function formatInvoiceLabel(source: string, txs: RawTransaction[]): string {
+  // Try to get the due date from a transaction in this source
+  const sample = txs.find((t) => t.source === source && t.invoiceDueDate);
+  const dateStr = sample?.invoiceDueDate || extractDateFromFilename(source);
+  if (dateStr && /^\d{4}-\d{2}/.test(dateStr)) {
+    const [y, m] = dateStr.split("-");
+    const mIdx = parseInt(m, 10) - 1;
+    const abbr = MONTH_ABBR_PT[mIdx] ?? m;
+    return `${abbr}/${y.slice(2)}`;
+  }
+  // Fallback: strip extension
+  return source.replace(/\.[^/.]+$/, "").slice(0, 30);
+}
+
+function PropagationModal({
+  data,
+  summaries: _summaries,
+  txs,
+  onApplyAll,
+  onKeepOne,
+}: {
+  data: PropagationData;
+  summaries: Record<string, import("@/lib/pdfExtract").InvoiceSummary>;
+  txs: RawTransaction[];
+  onApplyAll: () => void;
+  onKeepOne: () => void;
+}) {
+  const { newCategory, merchantLabel, similarTxs } = data;
+
+  // Group similar txs by invoice source
+  const bySource = similarTxs.reduce<Record<string, RawTransaction[]>>((acc, t) => {
+    if (!acc[t.source]) acc[t.source] = [];
+    acc[t.source].push(t);
+    return acc;
+  }, {});
+
+  const sources = Object.keys(bySource).sort();
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onKeepOne}
+      />
+
+      {/* Modal card */}
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl border border-border/60 w-full max-w-md overflow-hidden"
+        style={{ animation: "slideUp 0.22s cubic-bezier(0.34,1.26,0.64,1) both" }}
+      >
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-border/40">
+          <div className="flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <svg className="size-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10M7 12h6m-6 5h10M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">
+                Propagar categoria
+              </p>
+              <h3 className="font-display text-base font-700 leading-snug text-foreground">
+                Lançamentos similares encontrados
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-4 space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Encontramos <span className="font-semibold text-foreground">{similarTxs.length}</span> lançamento{similarTxs.length !== 1 ? "s" : ""} similares a{" "}
+            <span className="font-semibold text-foreground">"{merchantLabel}"</span> em outras faturas.
+          </p>
+
+          {/* Category badge */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Nova categoria:</span>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-semibold text-xs">
+              {newCategory}
+            </span>
+          </div>
+
+          {/* Affected invoices */}
+          <div className="rounded-xl border border-border/50 overflow-hidden bg-muted/20">
+            <div className="px-4 py-2.5 border-b border-border/30 bg-muted/30">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                Faturas afetadas
+              </p>
+            </div>
+            <div className="divide-y divide-border/20">
+              {sources.map((src) => {
+                const count = bySource[src].length;
+                const label = formatInvoiceLabel(src, txs);
+                return (
+                  <div key={src} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <svg className="size-3.5 text-muted-foreground flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-xs font-semibold text-foreground truncate">{label}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
+                        ({src.replace(/\.[^/.]+$/, "").slice(0, 22)})
+                      </span>
+                    </div>
+                    <span className="ml-3 flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary">
+                      {count} lanç.
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 pb-6 flex flex-col sm:flex-row gap-2.5">
+          <button
+            onClick={onApplyAll}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 active:scale-[0.98] transition-all duration-150 shadow-sm shadow-primary/25"
+          >
+            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Aplicar a Todos
+          </button>
+          <button
+            onClick={onKeepOne}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-border/60 text-sm font-semibold text-muted-foreground rounded-xl hover:text-foreground hover:border-foreground/30 active:scale-[0.98] transition-all duration-150 shadow-sm"
+          >
+            Manter Apenas Este
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(24px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)     scale(1); }
+        }
+      `}</style>
     </div>
   );
 }
