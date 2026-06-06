@@ -155,6 +155,10 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   const totalJuros = positives.filter(t => t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
   const totalAlim  = positives.filter(t => t.category === "Ifood / Restaurantes").reduce((s, t) => s + t.amount, 0);
   const totalTrans = positives.filter(t => t.category === "Transporte").reduce((s, t) => s + t.amount, 0);
+  const totalAssinaturas   = positives.filter(t => t.category === "Assinaturas").reduce((s, t) => s + t.amount, 0);
+  const totalComprasOnline = positives.filter(t => t.category === "Compras Online").reduce((s, t) => s + t.amount, 0);
+  const totalTim           = positives.filter(t => /tim\b|tim\*/i.test(t.description)).reduce((s, t) => s + t.amount, 0);
+
 
   const monthDelta = (() => {
     if (months.length < 2) return null;
@@ -267,47 +271,68 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
 
       {/* ── VISÃO GERAL (KPIs em Cards com Borda Superior) ── */}
-      <div className="mb-10">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-3.5">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Visão Geral · {months.length} Meses</p>
           <div className="h-px bg-border flex-1 ml-2 opacity-50" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           <KpiTopBorder
-            label="Total das faturas"
-            value={fmtBRL(totalFaturasConsolidado)}
-            sub={`${months.map(m => m.label.split(" ")[0]).join(" + ")}`}
-            color="oklch(0.47 0.21 270)"
-            valueColor="text-[#1e40af]"
-          />
-          <KpiTopBorder
-            label="Total juros/encargos"
+            label="Juros & Tarifas"
             value={fmtBRL(totalJuros)}
-            sub={totalJuros > 0 ? "Atenção a taxas e multas" : "Nenhum juro cobrado"}
+            sub={totalJuros > 0 ? "Fique atento a multas" : "Nenhum encargo"}
             color="oklch(0.60 0.20 25)"
-            valueColor="text-[#dc2626]"
+            valueColor="text-red-600"
             alert={totalJuros > 0}
+            icon={ShieldAlert}
           />
           <KpiTopBorder
-            label="Total alimentação"
+            label="Alimentação"
             value={fmtBRL(totalAlim)}
-            sub="Ifood / Restaurantes"
+            sub="iFood e Restaurantes"
             color="oklch(0.55 0.16 155)"
-            valueColor="text-[#0f766e]"
+            valueColor="text-teal-600"
+            icon={Utensils}
           />
           <KpiTopBorder
-            label="Total transporte"
+            label="Transporte"
             value={fmtBRL(totalTrans)}
-            sub="Uber, Gasolina, etc."
+            sub="Uber, gasolina, etc."
             color="oklch(0.35 0.05 250)"
-            valueColor="text-[#334155]"
+            valueColor="text-slate-700"
+            icon={Car}
+          />
+          <KpiTopBorder
+            label="Assinaturas"
+            value={fmtBRL(totalAssinaturas)}
+            sub="Google, Netflix, GPT"
+            color="oklch(0.54 0.18 295)"
+            valueColor="text-purple-600"
+            icon={Tv}
+          />
+          <KpiTopBorder
+            label="Compras Online"
+            value={fmtBRL(totalComprasOnline)}
+            sub="Amazon, M.Livre, etc."
+            color="oklch(0.62 0.15 200)"
+            valueColor="text-blue-600"
+            icon={ShoppingCart}
+          />
+          <KpiTopBorder
+            label="Recargas Tim"
+            value={fmtBRL(totalTim)}
+            sub="Telefonia e recargas"
+            color="oklch(0.47 0.21 270)"
+            valueColor="text-pink-600"
+            icon={Smartphone}
           />
           <KpiTopBorder
             label="Parcelas futuras"
             value={fmtBRL(futureTotal)}
-            sub="Saldo restante em aberto"
+            sub="A vencer em aberto"
             color="oklch(0.76 0.13 72)"
-            valueColor="text-[#d97706]"
+            valueColor="text-amber-600"
+            icon={Calendar}
           />
         </div>
       </div>
@@ -535,19 +560,22 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 }
 
 /* ── KPI Card com borda superior colorida ── */
-function KpiTopBorder({ label, value, sub, color, valueColor, alert }: any) {
+function KpiTopBorder({ label, value, sub, color, valueColor, alert, icon: Icon }: any) {
   return (
     <div 
-      className="glass-card overflow-hidden flex flex-col justify-between"
-      style={{ borderTop: `4px solid ${color}` }}
+      className="glass-card overflow-hidden flex flex-col justify-between shadow-sm border border-border/40 rounded-2xl bg-white/70 backdrop-blur-md transition-all hover:shadow-md hover:translate-y-[-1px] duration-200"
+      style={{ borderTop: `3px solid ${color}` }}
     >
-      <div className="p-5">
-        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.15em] mb-3">{label}</p>
-        <p className={`font-display text-2xl font-800 tabular tracking-tighter ${valueColor}`}>{value}</p>
+      <div className="p-4 flex-1">
+        <div className="flex items-center justify-between gap-1 mb-2">
+          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider truncate">{label}</p>
+          {Icon && <Icon className="size-3.5 text-muted-foreground/60 flex-shrink-0" />}
+        </div>
+        <p className={`font-display text-lg sm:text-xl font-800 tabular tracking-tighter ${valueColor}`}>{value}</p>
       </div>
-      <div className="px-5 py-3 bg-muted/20 border-t border-border/30 flex items-center justify-between">
-        <p className="text-[10px] text-muted-foreground font-medium">{sub}</p>
-        {alert && <AlertTriangle className="size-3 text-destructive" />}
+      <div className="px-4 py-2 bg-muted/10 border-t border-border/20 flex items-center justify-between">
+        <p className="text-[9px] text-muted-foreground font-semibold truncate leading-tight" title={sub}>{sub}</p>
+        {alert && <AlertTriangle className="size-3 text-destructive animate-pulse" />}
       </div>
     </div>
   );

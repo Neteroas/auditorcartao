@@ -574,9 +574,34 @@ function Index() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Lock className="size-3" />
-              {user ? "Modo Nuvem" : "Modo Local"}
+            {/* Status de Sincronização Compacto na Barra de Navegação */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/40 border border-border/40 text-[11px] font-semibold text-muted-foreground shadow-sm">
+              <span className={`size-1.5 rounded-full flex-shrink-0 ${
+                cloudStatus.includes("Erro") 
+                  ? "bg-destructive animate-pulse"
+                  : cloudStatus.includes("Modo local") || cloudStatus.includes("Local")
+                  ? "bg-amber-500"
+                  : cloudStatus.includes("Sincronizando")
+                  ? "bg-primary animate-pulse"
+                  : "bg-emerald-500"
+              }`} />
+              
+              <span className="max-w-[120px] sm:max-w-none truncate text-[10px] sm:text-xs">
+                {cloudStatus.replace("Dados sincronizados com a nuvem", "Nuvem Sincronizada")}
+              </span>
+              
+              {user && supabaseEnabled && (
+                <button
+                  onClick={() => synchronizeCloud(user.id)}
+                  disabled={busy}
+                  className="p-1 rounded-md hover:bg-white/80 active:scale-95 disabled:opacity-50 transition-all text-foreground/75 hover:text-foreground"
+                  title="Sincronizar agora"
+                >
+                  <svg className={`size-3.5 ${busy ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             <button
@@ -624,28 +649,8 @@ function Index() {
             <section>
               <UploadDropzone onFiles={handleFiles} busy={busy} />
               
-              {/* Status de sincronização com botão */}
+              {/* Aviso se não logado */}
               <div className="mt-4 space-y-3">
-                {cloudStatus && (
-                  <div className={`border p-4 flex items-center justify-between gap-3 text-xs rounded-sm ${
-                    cloudStatus.includes("Erro") 
-                      ? "border-destructive/25 bg-destructive/5 text-destructive"
-                      : cloudStatus.includes("Modo local")
-                      ? "border-warning/25 bg-warning/5 text-warning"
-                      : "border-primary/25 bg-primary/5 text-primary"
-                  }`}>
-                    <span className="font-semibold">{cloudStatus}</span>
-                    {user && supabaseEnabled && (
-                      <button
-                        onClick={() => synchronizeCloud(user.id)}
-                        disabled={busy}
-                        className="px-3 py-1.5 rounded bg-current/20 hover:bg-current/30 disabled:opacity-50 text-xs font-semibold whitespace-nowrap transition-colors"
-                      >
-                        {busy ? "Sincronizando..." : "Sincronizar Agora"}
-                      </button>
-                    )}
-                  </div>
-                )}
                 
                 {/* Aviso se não logado */}
                 {!user && supabaseEnabled && hasImportedData && (
@@ -679,26 +684,6 @@ function Index() {
           </>
         ) : (
           <section>
-            {cloudStatus && (
-              <div className={`mb-6 border p-4 flex items-center justify-between gap-3 text-xs rounded-sm ${
-                cloudStatus.includes("Erro") 
-                  ? "border-destructive/25 bg-destructive/5 text-destructive"
-                  : cloudStatus.includes("Modo local")
-                  ? "border-warning/25 bg-warning/5 text-warning"
-                  : "border-primary/25 bg-primary/5 text-primary"
-              }`}>
-                <span className="font-semibold">{cloudStatus}</span>
-                {user && supabaseEnabled && (
-                  <button
-                    onClick={() => synchronizeCloud(user.id)}
-                    disabled={busy}
-                    className="px-3 py-1.5 rounded bg-current/20 hover:bg-current/30 disabled:opacity-50 text-xs font-semibold whitespace-nowrap transition-colors"
-                  >
-                    {busy ? "Sincronizando..." : "Sincronizar Agora"}
-                  </button>
-                )}
-              </div>
-            )}
             
             {/* Aviso se não logado e tem dados */}
             {!user && supabaseEnabled && hasImportedData && (
