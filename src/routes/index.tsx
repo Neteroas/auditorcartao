@@ -622,7 +622,7 @@ function Index() {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16">
+      <div className={`max-w-7xl mx-auto px-6 md:px-12 ${hasImportedData ? 'py-6 md:py-8' : 'py-12 md:py-16'}`}>
         {!hasImportedData ? (
           <>
             {/* Hero header */}
