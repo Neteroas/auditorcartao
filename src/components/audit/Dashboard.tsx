@@ -190,6 +190,16 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
   const activeSource = selectedSource || invoiceSources[0] || "";
 
+  // Navigate from Ranking to the corresponding transaction in Revisar tab
+  const handleTransactionSelect = (tx: RawTransaction) => {
+    setSelectedSource(tx.source);
+    setTab("revisar");
+    setTimeout(() => {
+      const el = document.getElementById(`tx-${tx.id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+  };
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "panorama",   label: "Panorama",       icon: <BarChart2 className="size-3.5" /> },
     { id: "revisar",    label: "Revisar Fatura",  icon: <ListFilter className="size-3.5" /> },
@@ -707,14 +717,14 @@ function CategoriesView({ categories, total, categoriesList, onAddCategory, onRe
 function RankingView({ biggest, smallest, onTransactionSelect }: { biggest: RawTransaction[]; smallest: RawTransaction[]; onTransactionSelect: (tx: RawTransaction) => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <RankCard title="Maiores despesas" icon={<TrendingUp className="size-4 text-destructive" />} items={biggest} eyebrow="IV·A" />
-      <RankCard title="Menores despesas" icon={<TrendingDown className="size-4 text-positive" />} items={smallest} eyebrow="IV·B" muted />
+      <RankCard title="Maiores despesas" icon={<TrendingUp className="size-4 text-destructive" />} items={biggest} eyebrow="IV·A" onTransactionSelect={onTransactionSelect} />
+      <RankCard title="Menores despesas" icon={<TrendingDown className="size-4 text-positive" />} items={smallest} eyebrow="IV·B" muted onTransactionSelect={onTransactionSelect} />
     </div>
   );
 }
 
-function RankCard({ title, icon, items, eyebrow, muted }: {
-  title: string; icon: React.ReactNode; items: RawTransaction[]; eyebrow: string; muted?: boolean;
+function RankCard({ title, icon, items, eyebrow, muted, onTransactionSelect }: {
+  title: string; icon: React.ReactNode; items: RawTransaction[]; eyebrow: string; muted?: boolean; onTransactionSelect: (tx: RawTransaction) => void;
 }) {
   return (
     <div className="glass-card overflow-hidden">
