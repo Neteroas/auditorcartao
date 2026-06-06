@@ -56,7 +56,7 @@ async function fetchAllTransactions(userId: string): Promise<RawTransaction[]> {
           amount: sanitized.amount
         })
         .match({ user_id: userId, transaction_id: sanitized.id })
-        .then(({ error }) => {
+        .then(({ error }: { error: any }) => {
           if (error) console.error("Erro ao atualizar transação corrigida na nuvem:", error);
         });
     }
@@ -463,8 +463,8 @@ export async function fixOnlinePurchasesByCity(userId: string) {
     
     const DEFAULT_CATEGORIES = [
       "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
-      "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Telefonia (Planos/Aparelhos)", "Tarifas",
-      "Pagamentos/Créditos", "Outros"
+      "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Contas Básicas (Copel/Sanepar)", "Serviços",
+      "Telefonia (Planos/Aparelhos)", "Tarifas", "Pagamentos/Créditos", "Outros"
     ];
     
     const CITY_PATTERNS = [
@@ -714,11 +714,12 @@ export async function bulkUpdateCategoryByIds(
   return { updated };
 }
 
+
+
+
 /**
  * Checks all card_transactions in the database for the user that have an invoice_due_date.
  * If the due date doesn't end with "-11", updates it in bulk (grouped by old date) to end with "-11".
- * Also recategorizes any Sanepar transactions still sitting in "Serviços" or "Outros" to "Serviços"
- * so existing cloud records pick up the new keyword.
  */
 export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated: number }> {
   try {
@@ -730,11 +731,11 @@ export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated
 
     if (error) throw error;
 
-    const uniqueDates = Array.from(new Set((data || []).map(d => d.invoice_due_date)));
+    const uniqueDates = Array.from(new Set((data || []).map((d: any) => d.invoice_due_date as string)));
     let updatedCount = 0;
 
     for (const oldDate of uniqueDates) {
-      if (oldDate && /^\d{4}-\d{2}-\d{2}$/.test(oldDate)) {
+      if (oldDate && typeof oldDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(oldDate)) {
         const parts = oldDate.split('-');
         if (parts[2] !== '11') {
           const newDate = `${parts[0]}-${parts[1]}-11`;
@@ -749,25 +750,68 @@ export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated
         }
       }
     }
-    
-    if (updatedCount > 0) {
-      console.log(`[fixDates] Corrigidos ${updatedCount} lançamentos para o vencimento dia 11.`);
-    }
 
-    // Fix Sanepar: ensure cloud records are in "Serviços" (not "Outros")
-    // Only touch non-manually-categorized transactions
-    const { error: saneErr } = await supabase
-      .from("card_transactions")
-      .update({ category: "Serviços" })
-      .eq("user_id", userId)
-      .eq("is_manual_category", false)
-      .ilike("description", "%sanepar%");
-    
-    if (saneErr) console.error("[fixDates] Sanepar recategorization error:", saneErr);
-
+    console.log(`[fixDates] Corrigidos ${updatedCount} lançamentos para o vencimento dia 11.`);
     return { updated: updatedCount };
   } catch (err) {
     console.error("Erro ao corrigir datas de vencimento no cloud:", err);
+    throw err;
+  }
+}
+
+/**
+ * Bulk-recategorize all transactions whose description matches the basic bills pattern
+ * (e.g. Sanepar, Copel, etc.) to the "Contas Básicas (Copel/Sanepar)" category.
+ * Respects is_manual_category = true (never overwrites user's explicit choices).
+ * Returns the number of rows updated.
+ */
+export async function bulkRecategorizeBasicBills(userId: string): Promise<{ updated: number }> {
+  try {
+    const BASIC_BILLS_CATEGORY = "Contas Básicas (Copel/Sanepar)";
+    // Fetch all transactions that are NOT already the target category
+    const { data: txsData, error: fetchErr } = await supabase
+      .from("card_transactions")
+      .select("id, description, category, is_manual_category")
+      .eq("user_id", userId)
+      .neq("category", BASIC_BILLS_CATEGORY);
+
+    if (fetchErr) throw fetchErr;
+    if (!txsData || txsData.length === 0) return { updated: 0 };
+
+    // Regex for basic bills matching what's in pdfExtract.ts
+    const BASIC_BILLS_PATTERN = /sanepar|copel|\bcemar\b|\bcemig\b|\bcopasa\b|\bcpfl\b|\bsabesp\b|\benel\b|\bcoelba\b|\bcoelce\b|\bcelesc\b|\bcelpe\b|\blight\b|\bcomgas\b|\bcelg\b|\bceee\b|\benergisp\b|saneam|agua\s*pota|fornec.*agua|dist.*energia|dist.*agua|concessionaria/i;
+
+    const toUpdate = txsData.filter((tx: any) => {
+      if (tx.is_manual_category) return false; // preserve manual choices
+      return BASIC_BILLS_PATTERN.test(tx.description?.trim() ?? "");
+    });
+
+    if (toUpdate.length === 0) {
+      console.log("[bulkBasicBills] Nenhuma transação encontrada para recategorizar.");
+      return { updated: 0 };
+    }
+
+    console.log(`[bulkBasicBills] Recategorizando ${toUpdate.length} transações para "${BASIC_BILLS_CATEGORY}"…`);
+
+    // Update in batches of 200
+    const BATCH = 200;
+    let updated = 0;
+    for (let i = 0; i < toUpdate.length; i += BATCH) {
+      const ids = toUpdate.slice(i, i + BATCH).map((tx: any) => tx.id);
+      const { error: updateErr } = await supabase
+        .from("card_transactions")
+        .update({ category: BASIC_BILLS_CATEGORY })
+        .in("id", ids)
+        .eq("user_id", userId);
+
+      if (updateErr) throw updateErr;
+      updated += ids.length;
+    }
+
+    console.log(`[bulkBasicBills] ${updated} transações recategorizadas com sucesso.`);
+    return { updated };
+  } catch (err) {
+    console.error("Erro ao recategorizar transações de contas básicas:", err);
     throw err;
   }
 }

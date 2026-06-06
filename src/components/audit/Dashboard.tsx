@@ -487,6 +487,17 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
               from { transform: translateX(100%); }
               to { transform: translateX(0); }
             }
+            @keyframes scaleUp {
+              from { transform: scale(0.96); opacity: 0; }
+              to { transform: scale(1); opacity: 1; }
+            }
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            .animate-fade-in {
+              animation: fadeIn 0.2s ease-out both;
+            }
           `}</style>
         </div>
       )}
@@ -531,6 +542,8 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
             categoriesList={categoriesList}
             onAddCategory={onAddCategory}
             onRenameCategory={onRenameCategory}
+            txs={txs}
+            onUpdateCategory={onUpdateCategory}
           />
         )}
         {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} onTransactionSelect={handleTransactionSelect} />}
@@ -753,18 +766,53 @@ function ChartTip({ active, payload, label }: any) {
 }
 
 /* ── Categories ── */
-function CategoriesView({ categories, total, categoriesList, onAddCategory, onRenameCategory }: {
+function CategoriesView({
+  categories,
+  total,
+  categoriesList,
+  onAddCategory,
+  onRenameCategory,
+  txs,
+  onUpdateCategory,
+}: {
   categories: ReturnType<typeof aggregateByCategory>;
   total: number;
   categoriesList: string[];
   onAddCategory: (name: string) => void;
   onRenameCategory: (oldName: string, newName: string) => void;
+  txs: RawTransaction[];
+  onUpdateCategory?: (id: string, newCategory: string) => void;
 }) {
   const max = categories[0]?.total || 1;
   const [newCatName, setNewCatName] = useState("");
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
+
+  // Modal State
+  const [selectedCategoryTxs, setSelectedCategoryTxs] = useState<string | null>(null);
+  const [openedTxIds, setOpenedTxIds] = useState<string[]>([]);
+
+  const handleOpenCategory = (categoryName: string) => {
+    const ids = txs
+      .filter((t) => t.category === categoryName && t.amount > 0 && t.category !== "Pagamentos/Créditos")
+      .map((t) => t.id);
+    setOpenedTxIds(ids);
+    setSelectedCategoryTxs(categoryName);
+  };
+
+  const handleCloseCategory = () => {
+    setSelectedCategoryTxs(null);
+    setOpenedTxIds([]);
+  };
+
+  const modalTxs = useMemo(() => {
+    return txs.filter((t) => openedTxIds.includes(t.id));
+  }, [txs, openedTxIds]);
+
+  const modalTotal = useMemo(() => {
+    return modalTxs.reduce((sum, t) => sum + t.amount, 0);
+  }, [modalTxs]);
 
   function startEdit(name: string) {
     setEditingCat(name);
@@ -786,14 +834,18 @@ function CategoriesView({ categories, total, categoriesList, onAddCategory, onRe
         </div>
         <div className="divide-y divide-border/30">
           {categories.map((c, i) => (
-            <div key={c.category} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors duration-150">
+            <div 
+              key={c.category} 
+              onClick={() => handleOpenCategory(c.category)}
+              className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors duration-150 cursor-pointer group/row"
+            >
               <div className="col-span-1 text-center">
                 <span className="text-[10px] font-mono font-bold text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
               </div>
               <div className="col-span-4">
                 <div className="flex items-center gap-2.5">
                   <span className="size-2.5 rounded-full flex-shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="font-semibold text-sm text-foreground">{c.category}</span>
+                  <span className="font-semibold text-sm text-foreground group-hover/row:text-primary transition-colors">{c.category}</span>
                 </div>
               </div>
               <div className="col-span-4">
@@ -868,6 +920,115 @@ function CategoriesView({ categories, total, categoriesList, onAddCategory, onRe
           </div>
         </div>
       </div>
+
+      {/* ── CATEGORY TRANSACTIONS MODAL ── */}
+      {selectedCategoryTxs && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-300 animate-fade-in"
+            onClick={handleCloseCategory}
+          />
+          {/* Modal Container */}
+          <div 
+            className="relative bg-white rounded-2xl border border-border/80 shadow-2xl flex flex-col w-full max-w-3xl max-h-[85vh] z-10 overflow-hidden"
+            style={{ animation: "scaleUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both" }}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-border/40 flex items-center justify-between bg-muted/5">
+              <div>
+                <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                  <Tag className="size-4 text-primary" />
+                  Lançamentos em: {selectedCategoryTxs}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {modalTxs.length} lançamento{modalTxs.length !== 1 ? 's' : ''} · Total de <span className="font-semibold text-foreground">{fmtBRL(modalTotal)}</span>
+                </p>
+              </div>
+              <button 
+                onClick={handleCloseCategory}
+                className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Fechar"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto min-h-[200px]">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-border/40">
+                  <tr className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-5 py-3 text-left">Data</th>
+                    <th className="px-5 py-3 text-left">Descrição</th>
+                    <th className="px-5 py-3 text-left">Fatura</th>
+                    <th className="px-5 py-3 text-left">Categoria</th>
+                    <th className="px-5 py-3 text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/20">
+                  {modalTxs.map((t) => (
+                    <tr key={t.id} className="hover:bg-primary/[0.015] transition-colors duration-100">
+                      <td className="px-5 py-3.5 tabular text-muted-foreground text-xs font-mono font-medium">
+                        {t.date}
+                      </td>
+                      <td className="px-5 py-3.5 font-semibold text-foreground max-w-[220px] truncate" title={t.description}>
+                        {t.description}
+                        {t.installment && (
+                          <span className="ml-2 pill text-[9px] px-1.5 py-0.5 align-middle">
+                            {t.installment.current}/{t.installment.total}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-muted-foreground truncate max-w-[140px]" title={t.source}>
+                        {t.source.replace(/\.[^/.]+$/, "")}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <select
+                          value={t.category}
+                          onChange={(e) => onUpdateCategory?.(t.id, e.target.value)}
+                          className="w-full max-w-[160px] text-xs font-medium bg-white border border-border/50 hover:border-primary/45 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150 cursor-pointer shadow-sm text-foreground/80 hover:text-foreground font-sans appearance-none"
+                          style={{
+                            backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundPosition: "right 8px center",
+                            backgroundSize: "8px",
+                            paddingRight: "24px",
+                          }}
+                        >
+                          {categoriesList.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-5 py-3.5 text-right tabular font-700 font-mono text-foreground text-sm">
+                        {fmtBRL(t.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  {modalTxs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-12 text-muted-foreground text-xs">
+                        Nenhum lançamento nesta categoria.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-border/40 bg-muted/5 flex justify-end">
+              <button 
+                onClick={handleCloseCategory}
+                className="px-4 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/95 transition-all shadow-sm"
+              >
+                Concluir Ajustes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
