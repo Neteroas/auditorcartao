@@ -502,7 +502,7 @@ export async function extractData(file: File): Promise<ExtractedData> {
       return tDM.m === candDM.m && Math.abs(tDM.d - candDM.d) <= 7;
     });
     if (hasFuzzyDup) return false;
-    void fuzzyKey; // suppress unused warning
+    
     seenKeys.add(key);
     transactions.push(candidate);
     return true;
