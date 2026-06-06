@@ -111,6 +111,7 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
 
   for (const t of txs) {
     if (!t.installment) continue;
+    if (/ANUIDADE\s+DIFERENCIADA|DESC\s+AUTOMATICO\s+ANUD/i.test(t.description)) continue;
     const { current, total } = t.installment;
     const remaining = total - current;
     if (remaining <= 0) continue;
