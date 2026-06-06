@@ -713,3 +713,48 @@ export async function bulkUpdateCategoryByIds(
   console.log(`[propagate] ${updated} lançamentos similares atualizados para "${category}".`);
   return { updated };
 }
+
+/**
+ * Checks all card_transactions in the database for the user that have an invoice_due_date.
+ * If the due date doesn't end with "-11", updates it in bulk (grouped by old date) to end with "-11".
+ */
+export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated: number }> {
+  try {
+    const { data, error } = await supabase
+      .from("card_transactions")
+      .select("invoice_due_date")
+      .eq("user_id", userId)
+      .not("invoice_due_date", "is", null);
+
+    if (error) throw error;
+
+    const uniqueDates = Array.from(new Set((data || []).map(d => d.invoice_due_date)));
+    let updatedCount = 0;
+
+    for (const oldDate of uniqueDates) {
+      if (oldDate && /^\d{4}-\d{2}-\d{2}$/.test(oldDate)) {
+        const parts = oldDate.split('-');
+        if (parts[2] !== '11') {
+          const newDate = `${parts[0]}-${parts[1]}-11`;
+          const { error: updateErr, count } = await supabase
+            .from("card_transactions")
+            .update({ invoice_due_date: newDate })
+            .eq("user_id", userId)
+            .eq("invoice_due_date", oldDate);
+          
+          if (updateErr) throw updateErr;
+          updatedCount += count || 0;
+        }
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`[fixDates] Corrigidos ${updatedCount} lançamentos para o vencimento dia 11.`);
+    }
+    return { updated: updatedCount };
+  } catch (err) {
+    console.error("Erro ao corrigir datas de vencimento no cloud:", err);
+    throw err;
+  }
+}
+

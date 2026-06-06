@@ -12,6 +12,7 @@ import {
   bulkUpdateCategoryByIds,
   clearAllCloudData,
   deduplicateCloudTransactions,
+  fixCloudInvoiceDueDates,
   renameCategoryInCloud,
   removeSourceFromCloud,
   syncLocalDataToCloud,
@@ -20,7 +21,22 @@ import {
 import { extractDateFromFilename } from "@/lib/pdfExtract";
 import { ShieldCheck, Cpu, Lock } from "lucide-react";
 
+/** Force transaction due date day to 11 if it ends in another day */
+function fixInvoiceDueDate(t: RawTransaction): RawTransaction {
+  if (t.invoiceDueDate && /^\d{4}-\d{2}-\d{2}$/.test(t.invoiceDueDate)) {
+    const parts = t.invoiceDueDate.split('-');
+    if (parts[2] !== '11') {
+      return {
+        ...t,
+        invoiceDueDate: `${parts[0]}-${parts[1]}-11`
+      };
+    }
+  }
+  return t;
+}
+
 export const Route = createFileRoute("/")(
+
   {
     component: Index,
     head: () => ({
@@ -154,7 +170,7 @@ function Index() {
         } catch {}
 
         let loadedTxs = JSON.parse(raw);
-        loadedTxs = loadedTxs.map(sanitizeTransaction).map((t: any) => {
+        loadedTxs = loadedTxs.map(sanitizeTransaction).map(fixInvoiceDueDate).map((t: any) => {
           let tx = t;
           if (tx.category === "Mercado") {
             tx = { ...tx, category: "Mercados / Panificadoras" };
@@ -282,6 +298,13 @@ function Index() {
         if (transportUpdated > 0) {
           console.log(`[sync] ${transportUpdated} transações recategorizadas para "Transporte".`);
         }
+
+        // Correct invoice due dates to end with 11 (one-time per session)
+        setCloudStatus("Corrigindo datas de vencimento...");
+        const { updated: datesUpdated } = await fixCloudInvoiceDueDates(userId);
+        if (datesUpdated > 0) {
+          console.log(`[sync] ${datesUpdated} transações corrigidas para o vencimento dia 11.`);
+        }
       }
 
       // Always read from refs so we never use stale closure state
@@ -292,7 +315,7 @@ function Index() {
       setCloudStatus("Sincronizando com a nuvem...");
       const cloud = await syncLocalDataToCloud(userId, currentTxs, currentCats, currentSums, DEFAULT_CATEGORIES);
       
-      const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction);
+      const normalizedTxs = cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction).map(fixInvoiceDueDate);
       setTxs(normalizedTxs);
       setSummaries(cloud.summaries);
       
@@ -364,7 +387,7 @@ function Index() {
       const keptTxs = currentTxs.filter((t) => !reimportedSources.has(t.source));
       const keptKeys = new Set(keptTxs.map(txKey));
       const newUnique = all.filter((t) => !keptKeys.has(txKey(t)));
-      const updatedTxs = [...keptTxs, ...newUnique];
+      const updatedTxs = [...keptTxs, ...newUnique].map(fixInvoiceDueDate);
 
       const updatedSummaries = Object.keys(newSummaries).length > 0
         ? { ...currentSums, ...newSummaries }
@@ -393,7 +416,7 @@ function Index() {
           updatedSummaries,
           DEFAULT_CATEGORIES
         );
-        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction));
+        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction).map(fixInvoiceDueDate));
         setSummaries(cloud.summaries);
         setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories));
         setCloudStatus("Dados sincronizados com a nuvem");

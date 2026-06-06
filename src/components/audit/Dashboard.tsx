@@ -187,8 +187,44 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   }, [txs, summaries]);
 
   const [selectedSource, setSelectedSource] = useState<string>("");
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   const activeSource = selectedSource || invoiceSources[0] || "";
+
+  const { minMaxMonths, totalAmountAll } = useMemo(() => {
+    let total = 0;
+    const dates: string[] = [];
+    
+    for (const src of invoiceSources) {
+      const sum = summaries[src];
+      if (sum) total += sum.totalAmount;
+      
+      const tx = txs.find((t) => t.source === src && t.invoiceDueDate);
+      const dueDate = tx?.invoiceDueDate || extractDateFromFilename(src);
+      if (dueDate && /^\d{4}-\d{2}/.test(dueDate)) {
+        dates.push(dueDate.slice(0, 7));
+      }
+    }
+    
+    dates.sort();
+    
+    const MONTH_ABBR_PT = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+    const formatMonthKey = (mKey: string) => {
+      if (!mKey) return "";
+      const [y, m] = mKey.split("-");
+      const idx = parseInt(m, 10) - 1;
+      return `${MONTH_ABBR_PT[idx] ?? m}/${y.slice(2)}`;
+    };
+    
+    return {
+      totalAmountAll: total,
+      minMaxMonths: {
+        minLabel: dates.length > 0 ? formatMonthKey(dates[0]) : "",
+        maxLabel: dates.length > 0 ? formatMonthKey(dates[dates.length - 1]) : "",
+      }
+    };
+  }, [invoiceSources, summaries, txs]);
+
 
   // Navigate from Ranking to the corresponding transaction in Revisar tab
   const handleTransactionSelect = (tx: RawTransaction) => {
@@ -276,64 +312,177 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         </div>
       </div>
 
-      {/* ── FATURAS IMPORTADAS ── */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Faturas Importadas · {invoiceSources.length} arquivo{invoiceSources.length !== 1 ? 's' : ''}</p>
-          <div className="h-px bg-border flex-1 ml-2 opacity-50" />
+      {/* ── BARRA DE STATUS DAS FATURAS IMPORTADAS ── */}
+      {invoiceSources.length > 0 && (
+        <div 
+          onClick={() => setIsDrawerOpen(true)}
+          className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-border/50 bg-white hover:border-primary/30 hover:bg-muted/10 transition-all cursor-pointer shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-sm flex-shrink-0">
+              <FileText className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">Faturas Importadas</p>
+              <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                <span className="font-semibold text-foreground">{invoiceSources.length} arquivo{invoiceSources.length !== 1 ? 's' : ''}</span>
+                <span className="opacity-40">•</span>
+                <span>Período: {minMaxMonths.minLabel} a {minMaxMonths.maxLabel}</span>
+                <span className="opacity-40">•</span>
+                <span className="font-bold text-primary">{fmtBRL(totalAmountAll)}</span>
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsDrawerOpen(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-semibold hover:border-foreground/30 text-foreground transition-all shadow-sm self-start sm:self-auto"
+          >
+            Gerenciar
+            <ChevronRight className="size-3.5 text-muted-foreground" />
+          </button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {invoiceSources.map((src) => {
-            const count = txs.filter(t => t.source === src).length;
-            const summary = summaries[src];
-            const dueDateTx = txs.find(t => t.source === src && t.invoiceDueDate);
-            const dueDate = dueDateTx?.invoiceDueDate
-              ? (() => { const [y, m, d] = dueDateTx.invoiceDueDate!.split('-'); return `${d}/${m}/${y}`; })()
-              : null;
-            return (
-              <div
-                key={src}
-                className={`flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 shadow-sm bg-white ${
-                  src === activeSource
-                    ? 'border-primary/50 text-primary bg-primary/5'
-                    : 'border-border/50 text-muted-foreground hover:border-primary/30 hover:text-foreground'
-                }`}
-              >
-                <button
-                  onClick={() => { setSelectedSource(src); setTab('revisar'); }}
-                  className="flex items-center gap-2 cursor-pointer"
-                  title={`Clique para revisar esta fatura`}
-                >
-                  <FileText className="size-3 flex-shrink-0" />
-                  <span className="max-w-[160px] truncate">{src.replace(/\.[^/.]+$/, '')}</span>
-                  <span className="px-1.5 py-0.5 rounded-md bg-muted/60 text-[10px] font-bold">{count} lanç.</span>
-                  {dueDate && (
-                    <span className="text-[10px] font-normal flex items-center gap-1">
-                      <Calendar className="size-2.5" /> Venc. {dueDate}
-                    </span>
-                  )}
-                  {summary && (
-                    <span className="text-[10px] font-bold text-primary">{fmtBRL(summary.totalAmount)}</span>
-                  )}
-                </button>
-                {onRemoveSource && (
-                  <button
-                    onClick={() => {
-                      if (confirm(`Remover fatura "${src.replace(/\.[^/.]+$/, '')}" e seus ${count} lançamentos?`)) {
-                        onRemoveSource(src);
-                      }
-                    }}
-                    className="ml-1 p-0.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors duration-150"
-                    title="Remover esta fatura"
-                  >
-                    <X className="size-3" />
-                  </button>
-                )}
+      )}
+
+      {/* ── DRAWER DE GERENCIAMENTO DE FATURAS ── */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-[200] overflow-hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setIsDrawerOpen(false)}
+          />
+          {/* Drawer container */}
+          <div 
+            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-border/80 shadow-2xl flex flex-col z-10"
+            style={{ animation: "slideLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) both" }}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-border/40 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-base font-bold text-foreground">Faturas Importadas</h3>
+                <p className="text-xs text-muted-foreground">{invoiceSources.length} arquivo{invoiceSources.length !== 1 ? 's' : ''} carregado{invoiceSources.length !== 1 ? 's' : ''}</p>
               </div>
-            );
-          })}
+              <button 
+                onClick={() => setIsDrawerOpen(false)}
+                className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            
+            {/* Quick stats banner inside drawer */}
+            {invoiceSources.length > 0 && (
+              <div className="px-6 py-4 bg-muted/20 border-b border-border/20 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Valor Consolidado</p>
+                  <p className="text-sm font-bold text-primary mt-0.5">{fmtBRL(totalAmountAll)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Período Ativo</p>
+                  <p className="text-sm font-bold text-foreground mt-0.5">{minMaxMonths.minLabel} a {minMaxMonths.maxLabel}</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              {invoiceSources.map((src) => {
+                const count = txs.filter(t => t.source === src).length;
+                const summary = summaries[src];
+                const dueDateTx = txs.find(t => t.source === src && t.invoiceDueDate);
+                const dueDate = dueDateTx?.invoiceDueDate
+                  ? (() => { const [y, m, d] = dueDateTx.invoiceDueDate!.split('-'); return `${d}/${m}/${y}`; })()
+                  : null;
+                const isActive = src === activeSource;
+                
+                return (
+                  <div 
+                    key={src}
+                    className={`group relative flex flex-col p-4 rounded-xl border transition-all duration-200 ${
+                      isActive 
+                        ? 'border-primary bg-primary/[0.02] shadow-sm shadow-primary/5' 
+                        : 'border-border/60 hover:border-border-hover hover:bg-muted/10'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0 cursor-pointer flex-1" onClick={() => { setSelectedSource(src); setTab('revisar'); setIsDrawerOpen(false); }}>
+                        <div className={`size-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isActive ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <FileText className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors" title={src}>
+                            {src.replace(/\.[^/.]+$/, '')}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[10px] text-muted-foreground">
+                            <span>{count} lançamentos</span>
+                            {dueDate && (
+                              <>
+                                <span className="opacity-40">•</span>
+                                <span className="flex items-center gap-0.5"><Calendar className="size-2.5" /> Venc. {dueDate}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {onRemoveSource && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Remover fatura "${src.replace(/\.[^/.]+$/, '')}" e seus ${count} lançamentos?`)) {
+                              onRemoveSource(src);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                          title="Remover esta fatura"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {summary && (
+                      <div className="mt-3 pt-3 border-t border-border/20 flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground">Valor Total:</span>
+                        <span className="font-bold text-foreground">{fmtBRL(summary.totalAmount)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              
+              {invoiceSources.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground mb-3">
+                    <FileText className="size-6" />
+                  </div>
+                  <p className="text-xs font-bold text-foreground">Nenhuma fatura ativa</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 max-w-[200px] mx-auto">Importe novos arquivos PDF para visualizar e auditar lançamentos.</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-6 border-t border-border/40 bg-muted/10">
+              <button 
+                onClick={() => setIsDrawerOpen(false)}
+                className="w-full inline-flex items-center justify-center px-4 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/95 transition-all shadow-sm"
+              >
+                Voltar ao Dashboard
+              </button>
+            </div>
+          </div>
+          
+          <style>{`
+            @keyframes slideLeft {
+              from { transform: translateX(100%); }
+              to { transform: translateX(0); }
+            }
+          `}</style>
         </div>
-      </div>
+      )}
+
 
 
       <div className="flex items-center gap-1 p-1 bg-white border border-border/60 rounded-xl shadow-sm mb-8 overflow-x-auto">

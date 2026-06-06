@@ -220,11 +220,11 @@ export function extractDateFromFilename(filename: string): string | null {
   const clean = filename.toLowerCase();
   const mY = clean.match(/(20\d{2})[-_](\d{1,2})/);
   if (mY) {
-    return `${mY[1]}-${mY[2].padStart(2, "0")}-10`;
+    return `${mY[1]}-${mY[2].padStart(2, "0")}-11`;
   }
   const mYRev = clean.match(/(\d{1,2})[-_](20\d{2})/);
   if (mYRev) {
-    return `${mYRev[2]}-${mYRev[1].padStart(2, "0")}-10`;
+    return `${mYRev[2]}-${mYRev[1].padStart(2, "0")}-11`;
   }
   const monthsBR: Record<string, string> = {
     // Put long month names first to prevent partial matching (e.g., "jul" matching "julho")
@@ -237,7 +237,7 @@ export function extractDateFromFilename(filename: string): string | null {
     if (clean.includes(name)) {
       const yearMatch = clean.match(/(20\d{2})/);
       if (yearMatch) {
-        return `${yearMatch[1]}-${num}-10`;
+        return `${yearMatch[1]}-${num}-11`;
       }
 
       // Try to find a 2-digit year right after the month name or separated by a separator
@@ -246,7 +246,7 @@ export function extractDateFromFilename(filename: string): string | null {
       if (match) {
         const yearNum = Number(match[1]);
         const fullYear = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
-        return `${fullYear}-${num}-10`;
+        return `${fullYear}-${num}-11`;
       }
 
       const shortYearMatch = clean.match(/\b(\d{2})\b/);
@@ -254,11 +254,11 @@ export function extractDateFromFilename(filename: string): string | null {
         const yearNum = Number(shortYearMatch[1]);
         if (yearNum >= 0 && yearNum <= 99) {
           const fullYear = yearNum < 50 ? 2000 + yearNum : 1900 + yearNum;
-          return `${fullYear}-${num}-10`;
+          return `${fullYear}-${num}-11`;
         }
       }
 
-      return `${new Date().getFullYear()}-${num}-10`;
+      return `${new Date().getFullYear()}-${num}-11`;
     }
   }
   return null;
@@ -272,7 +272,7 @@ function extractDueDateFromText(text: string, fallbackYear: number): string | nu
     const mo = parseInt(monthStr, 10);
     const y = yearInt < 100 ? yearInt + 2000 : yearInt;
     if (mo < 1 || mo > 12 || y < 2000 || y > 2100) return null;
-    const d = dayStr ? parseInt(dayStr, 10) : 1;
+    const d = dayStr ? parseInt(dayStr, 10) : 11; // default to day 11 when PDF only shows MM/YYYY
     if (d < 1 || d > 31) return null;
     return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   };
@@ -451,7 +451,7 @@ export async function extractData(file: File): Promise<ExtractedData> {
 
   if (!invoiceDueDate) {
     const now = new Date();
-    invoiceDueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-10`;
+    invoiceDueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-11`;
   }
 
   const transactions: RawTransaction[] = [];
