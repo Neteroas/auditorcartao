@@ -51,6 +51,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   const [tab, setTab] = useState<Tab>("panorama");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
 
+
   const positives = useMemo(() => txs.filter((t) => t.amount > 0 && t.category !== "Pagamentos/Créditos"), [txs]);
   const months = useMemo(() => {
     const rawMonths = aggregateByMonth(txs);
@@ -186,6 +187,17 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
   }, [txs, summaries]);
 
   const [selectedSource, setSelectedSource] = useState<string>("");
+  // Handler to navigate from Ranking to Revisar view for a specific transaction
+  const handleTransactionSelect = (tx: RawTransaction) => {
+    // Set the active source (invoice) and switch to the review tab
+    setSelectedSource(tx.source);
+    setTab("revisar");
+    // Optional: set hash to scroll to transaction after view changes
+    const hash = `#tx-${tx.id}`;
+    if (typeof window !== "undefined") {
+      window.location.hash = hash;
+    }
+  };
   const activeSource = selectedSource || invoiceSources[0] || "";
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -364,7 +376,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
             onRenameCategory={onRenameCategory}
           />
         )}
-        {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} />}
+        {tab === "ranking"    && <RankingView biggest={biggest} smallest={smallest} onTransactionSelect={handleTransactionSelect} />}
         {tab === "parcelas"   && <FutureView future={future} />}
         {tab === "insights"   && <InsightsView insights={insights} />}
         {tab === "ledger"     && <LedgerView txs={txs} />}
@@ -702,7 +714,7 @@ function CategoriesView({ categories, total, categoriesList, onAddCategory, onRe
 
 
 /* ── Ranking ── */
-function RankingView({ biggest, smallest }: { biggest: RawTransaction[]; smallest: RawTransaction[] }) {
+function RankingView({ biggest, smallest, onTransactionSelect }: { biggest: RawTransaction[]; smallest: RawTransaction[]; onTransactionSelect: (tx: RawTransaction) => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <RankCard title="Maiores despesas" icon={<TrendingUp className="size-4 text-destructive" />} items={biggest} eyebrow="IV·A" />
@@ -722,7 +734,12 @@ function RankCard({ title, icon, items, eyebrow, muted }: {
       </div>
       <div className="divide-y divide-border/25">
         {items.map((t, i) => (
-          <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-muted/30 transition-colors duration-150">
+          <div
+            key={t.id}
+            id={`tx-${t.id}`}
+            className="flex items-center gap-4 px-6 py-3.5 hover:bg-muted/30 transition-colors duration-150 cursor-pointer"
+            onClick={() => onTransactionSelect(t)}
+          >
             <span className="font-mono text-[11px] font-bold text-muted-foreground w-6 flex-shrink-0">{String(i + 1).padStart(2, "0")}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{t.description}</p>
@@ -1160,7 +1177,7 @@ function RevisarView({
                       </thead>
                       <tbody className="divide-y divide-border/10">
                         {catTxs.map((t) => (
-                          <tr key={t.id} className="hover:bg-primary/[0.015] transition-colors duration-100">
+                          <tr id={`tx-${t.id}`} key={t.id} className="hover:bg-primary/[0.015] transition-colors duration-100">
                             <td className="px-5 py-2.5 tabular text-muted-foreground text-xs font-mono font-medium">
                               {t.date}
                             </td>
