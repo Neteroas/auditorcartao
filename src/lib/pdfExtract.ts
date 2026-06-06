@@ -58,7 +58,7 @@ const CATEGORIES: { name: string; keywords: RegExp }[] = [
   { name: "Lazer", keywords: /cinema|ingresso|show|teatro|park|\bbar\s|pub|cervej|steam|playstation|xbox|nintendo/i },
   { name: "Viagem", keywords: /hotel|airbnb|booking|decolar|latam|gol|azul|smiles|cvc|hertz|localiza/i },
   { name: "Educação", keywords: /udemy|coursera|alura|hotmart|curso|escola|faculdade|colegio/i },
-  { name: "Serviços", keywords: /tim|vivo|claro|\boi\s|\bnet\b|sky|enel|cemig|sabesp|copasa|cpfl|seguro|condominio|aluguel/i },
+  { name: "Serviços", keywords: /tim|vivo|claro|\boi\s|\bnet\b|sky|enel|cemig|sabesp|sanepar|copasa|cpfl|seguro|condominio|aluguel|saneam|agua\s*pota|fornec.*agua/i },
   { name: "Tarifas", keywords: /anuidade|tarifa|iof|juros|encargo|multa|seguro\s?cart/i },
   { name: "Pagamentos/Créditos", keywords: /pagamento|cr[eé]dito|estorno|reembolso|cashback|devolu/i },
 ];
@@ -170,8 +170,8 @@ const TRANSACTION_LINE_RE = new RegExp(`(${DATE_TOKEN_PATTERN})\\s+(.+?)\\s+(${A
 const BLOCK_START_RE = new RegExp(`^\\s*(${DATE_TOKEN_PATTERN})(?:\\s+(${DATE_TOKEN_PATTERN}))?(?:\\s+|$)`, "i");
 const AMOUNT_GLOBAL_RE = new RegExp(AMOUNT_TOKEN_PATTERN, "gi");
 const INSTALLMENT_RE = /(\d{1,2})\s?\/\s?(\d{1,2})/;
-const TRANSACTION_BLOCK_BREAK_RE = /^(?:resumo\b|lan[çc]amentos?\b|data\b|descri[çc][aã]o\b|valor\b|saldo\s+(?:anterior|para)\b|pagamentos?\b|cr[eé]ditos?\b|compras?\s+(?:nacionais?|internacionais?)\b|tarifas?\b|encargos?\b|juros\b|total\b|limite\b)/i;
-const IGNORED_DESCRIPTION_RE = /^(?:total\s+(?:da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(?:total|dispon[ií]vel|utilizado)|data\s+descri[çc][aã]o\s+valor|data\s+lan[çc]amento|descri[çc][aã]o\s+do\s+lan[çc]amento)$/i;
+const TRANSACTION_BLOCK_BREAK_RE = /^(?:resumo\b|lan[\xE7c]amentos?\b|data\b|descri[\xE7c][\xE3a]o\b|valor\b|saldo\s+(?:anterior|para)\b|pagamentos?\b|cr[\xE9e]ditos?\b|compras?\s+(?:nacionais?|internacionais?)\b|tarifas?\b|encargos?\b|juros\b|total\b|limite\b|per[\xED]odo\b|refer[\xEA|e]ncia\b|fatura\s+de\b|compet[\xEA|e]ncia\b|m[\xEA|e]s\s+de\b)/i;
+const IGNORED_DESCRIPTION_RE = /^(?:total\s+(?:da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(?:total|dispon[ií]vel|utilizado)|data\s+descri[çc][aã]o\s+valor|data\s+lan[çc]amento|descri[çc][aã]o\s+do\s+lan[çc]amento|pagamento\s+recebido|saldo\s+anterior|compras?\s+(?:nacionais?|internacionais?)|tarifas?\s+e\s+encargos?|total\s+a\s+pagar|fatura\s+atual|fatura\s+anterior|valor\s+da\s+fatura|encargos?\s+do\s+m[eê]s|encargos?\s+financeiros?)$/i;
 
 function createTransactionCandidate(
   dateToken: string,
@@ -458,10 +458,37 @@ export async function extractData(file: File): Promise<ExtractedData> {
   const rawLines = fullText.split("\n").map((l) => l.replace(/\s+/g, " ").trim());
   const seenKeys = new Set<string>();
 
+  /**
+   * Fuzzy-dedup helper: returns true if two descriptions are near-identical
+   * (one is a prefix/suffix of the other, or they share 90%+ characters).
+   * Used to prevent the same Sanepar/utility charge from being recorded twice
+   * when the PDF has both a transaction line and a confirmation/summary line
+   * with slightly different wording.
+   */
+  function isSimilarDesc(a: string, b: string): boolean {
+    if (a === b) return true;
+    const shorter = a.length < b.length ? a : b;
+    const longer  = a.length < b.length ? b : a;
+    if (longer.startsWith(shorter.slice(0, Math.min(shorter.length, 15)))) return true;
+    // Overlap ratio
+    const overlap = shorter.split(' ').filter(w => w.length > 2 && longer.includes(w)).length;
+    const words = shorter.split(' ').filter(w => w.length > 2).length;
+    return words > 0 && overlap / words >= 0.85;
+  }
+
   const pushCandidate = (candidate: RawTransaction | null) => {
     if (!candidate) return false;
     const key = `${candidate.date}|${candidate.description}|${candidate.amount.toFixed(2)}`;
     if (seenKeys.has(key)) return false;
+    // Fuzzy dedup: block near-identical transactions (same date+amount, very similar desc)
+    const fuzzyKey = `${candidate.date}|${candidate.amount.toFixed(2)}`;
+    const hasFuzzyDup = transactions.some(
+      (t) => t.date === candidate.date &&
+             Math.abs(t.amount - candidate.amount) < 0.01 &&
+             isSimilarDesc(t.description.toLowerCase().slice(0, 40), candidate.description.toLowerCase().slice(0, 40))
+    );
+    if (hasFuzzyDup) return false;
+    void fuzzyKey; // suppress unused warning
     seenKeys.add(key);
     transactions.push(candidate);
     return true;

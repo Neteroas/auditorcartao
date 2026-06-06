@@ -717,6 +717,8 @@ export async function bulkUpdateCategoryByIds(
 /**
  * Checks all card_transactions in the database for the user that have an invoice_due_date.
  * If the due date doesn't end with "-11", updates it in bulk (grouped by old date) to end with "-11".
+ * Also recategorizes any Sanepar transactions still sitting in "Serviços" or "Outros" to "Serviços"
+ * so existing cloud records pick up the new keyword.
  */
 export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated: number }> {
   try {
@@ -751,10 +753,21 @@ export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated
     if (updatedCount > 0) {
       console.log(`[fixDates] Corrigidos ${updatedCount} lançamentos para o vencimento dia 11.`);
     }
+
+    // Fix Sanepar: ensure cloud records are in "Serviços" (not "Outros")
+    // Only touch non-manually-categorized transactions
+    const { error: saneErr } = await supabase
+      .from("card_transactions")
+      .update({ category: "Serviços" })
+      .eq("user_id", userId)
+      .eq("is_manual_category", false)
+      .ilike("description", "%sanepar%");
+    
+    if (saneErr) console.error("[fixDates] Sanepar recategorization error:", saneErr);
+
     return { updated: updatedCount };
   } catch (err) {
     console.error("Erro ao corrigir datas de vencimento no cloud:", err);
     throw err;
   }
 }
-
