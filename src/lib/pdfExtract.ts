@@ -191,6 +191,9 @@ function createTransactionCandidate(
     .replace(/\s{2,}/g, " ")
     .replace(/^[\-–—:;|]+\s*/, "")
     .replace(/\s+[\-–—:;|]+$/, "")
+    // Strip a leading "DD/MM" or "DD/MM/YY(YY)" that some PDFs prepend when
+    // the lançamento has two date columns (data compra + data lançamento).
+    .replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?\s+/, "")
     .trim();
 
   if (!description || description.length < 2) return null;
@@ -480,15 +483,26 @@ export async function extractData(file: File): Promise<ExtractedData> {
     if (!candidate) return false;
     const key = `${candidate.date}|${candidate.description}|${candidate.amount.toFixed(2)}`;
     if (seenKeys.has(key)) return false;
-    // Fuzzy dedup: block near-identical transactions (same date+amount, very similar desc)
-    const fuzzyKey = `${candidate.date}|${candidate.amount.toFixed(2)}`;
-    const hasFuzzyDup = transactions.some(
-      (t) => t.date === candidate.date &&
-             Math.abs(t.amount - candidate.amount) < 0.01 &&
-             isSimilarDesc(t.description.toLowerCase().slice(0, 40), candidate.description.toLowerCase().slice(0, 40))
-    );
+    // Fuzzy dedup: block near-identical transactions. We allow the date to
+    // differ by a few days because some statements expose both "data compra"
+    // and "data lançamento" and the parser may pick either one for the same
+    // underlying charge (e.g. Sanepar shows up twice with 29/04 and 03/05).
+    const parseDM = (s: string) => {
+      const [d, m] = s.split("/").map((x) => parseInt(x, 10));
+      return isNaN(d) || isNaN(m) ? null : { d, m };
+    };
+    const candDM = parseDM(candidate.date);
+    const hasFuzzyDup = transactions.some((t) => {
+      if (Math.abs(t.amount - candidate.amount) >= 0.01) return false;
+      if (!isSimilarDesc(t.description.toLowerCase().slice(0, 40), candidate.description.toLowerCase().slice(0, 40))) return false;
+      if (t.date === candidate.date) return true;
+      const tDM = parseDM(t.date);
+      if (!tDM || !candDM) return false;
+      // Same month, within 7 days → treat as the same launch
+      return tDM.m === candDM.m && Math.abs(tDM.d - candDM.d) <= 7;
+    });
     if (hasFuzzyDup) return false;
-    void fuzzyKey; // suppress unused warning
+    
     seenKeys.add(key);
     transactions.push(candidate);
     return true;
