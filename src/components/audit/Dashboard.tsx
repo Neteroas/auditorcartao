@@ -1581,3 +1581,298 @@ function RevisarView({
     </div>
   );
 }
+
+/* ── Relatórios: Filtros + Impressão ── */
+function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categoriesList: string[] }) {
+  const availableCats = useMemo(() => {
+    const present = new Set(txs.map((t) => t.category));
+    return categoriesList.filter((c) => present.has(c));
+  }, [txs, categoriesList]);
+
+  const months = useMemo(() => {
+    const set = new Set<string>();
+    txs.forEach((t) => {
+      if (t.invoiceDueDate) set.add(t.invoiceDueDate.slice(0, 7));
+    });
+    return Array.from(set).sort();
+  }, [txs]);
+
+  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
+  const [startMonth, setStartMonth] = useState<string>("all");
+  const [endMonth, setEndMonth] = useState<string>("all");
+  const [mode, setMode] = useState<"resumido" | "detalhado">("resumido");
+  const [generated, setGenerated] = useState(false);
+
+  const toggleCat = (c: string) => {
+    setSelectedCats((prev) => {
+      const n = new Set(prev);
+      if (n.has(c)) n.delete(c); else n.add(c);
+      return n;
+    });
+  };
+  const selectAll = () => setSelectedCats(new Set(availableCats));
+  const clearAll = () => setSelectedCats(new Set());
+
+  const filtered = useMemo(() => {
+    return txs.filter((t) => {
+      if (selectedCats.size > 0 && !selectedCats.has(t.category)) return false;
+      if (startMonth !== "all" || endMonth !== "all") {
+        const m = t.invoiceDueDate?.slice(0, 7);
+        if (!m) return false;
+        if (startMonth !== "all" && m < startMonth) return false;
+        if (endMonth !== "all" && m > endMonth) return false;
+      }
+      // Reports focus on actual spending (positive amounts, exclude payments/credits)
+      if (t.category === "Pagamentos/Créditos") return false;
+      if (t.amount <= 0) return false;
+      return true;
+    });
+  }, [txs, selectedCats, startMonth, endMonth]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, RawTransaction[]>();
+    filtered.forEach((t) => {
+      if (!map.has(t.category)) map.set(t.category, []);
+      map.get(t.category)!.push(t);
+    });
+    return Array.from(map.entries())
+      .map(([cat, list]) => ({
+        category: cat,
+        items: sortByDate(list),
+        total: list.reduce((s, t) => s + t.amount, 0),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [filtered]);
+
+  const grandTotal = grouped.reduce((s, g) => s + g.total, 0);
+  const itemCount = filtered.length;
+
+  const periodLabel = (() => {
+    if (startMonth === "all" && endMonth === "all") return "Todos os períodos";
+    const fmt = (m: string) => {
+      if (m === "all") return "—";
+      const [y, mm] = m.split("-");
+      return `${mm}/${y}`;
+    };
+    return `${fmt(startMonth)} até ${fmt(endMonth)}`;
+  })();
+
+  const todayLabel = new Date().toLocaleDateString("pt-BR");
+
+  return (
+    <div className="space-y-6">
+      {/* Filtros (no-print) */}
+      <div className="glass-card card-accent-top p-6 no-print">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-xl font-700 text-foreground">Relatórios</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Gere relatórios filtrados e imprima.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGenerated(true)}
+              className="px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+            >
+              Gerar Relatório
+            </button>
+            <button
+              onClick={() => window.print()}
+              disabled={!generated}
+              className="px-4 py-2 text-xs font-semibold rounded-lg border border-border bg-white hover:bg-muted/60 transition-colors disabled:opacity-50"
+            >
+              Imprimir
+            </button>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-foreground">Categorias</label>
+              <div className="flex gap-2 text-xs">
+                <button onClick={selectAll} className="text-primary hover:underline">Todas</button>
+                <button onClick={clearAll} className="text-muted-foreground hover:underline">Limpar</button>
+              </div>
+            </div>
+            <div className="max-h-56 overflow-auto border border-border/60 rounded-lg p-2 bg-white space-y-1">
+              {availableCats.map((c) => (
+                <label key={c} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedCats.has(c)}
+                    onChange={() => toggleCat(c)}
+                    className="accent-primary"
+                  />
+                  {c}
+                </label>
+              ))}
+              {availableCats.length === 0 && (
+                <div className="text-xs text-muted-foreground p-2">Nenhuma categoria disponível.</div>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {selectedCats.size === 0 ? "Nenhuma selecionada = todas." : `${selectedCats.size} selecionada(s)`}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-2">Período</label>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={startMonth}
+                  onChange={(e) => setStartMonth(e.target.value)}
+                  className="text-sm border border-border rounded-lg px-3 py-2 bg-white"
+                >
+                  <option value="all">Início (todos)</option>
+                  {months.map((m) => {
+                    const [y, mm] = m.split("-");
+                    return <option key={m} value={m}>{mm}/{y}</option>;
+                  })}
+                </select>
+                <select
+                  value={endMonth}
+                  onChange={(e) => setEndMonth(e.target.value)}
+                  className="text-sm border border-border rounded-lg px-3 py-2 bg-white"
+                >
+                  <option value="all">Fim (todos)</option>
+                  {months.map((m) => {
+                    const [y, mm] = m.split("-");
+                    return <option key={m} value={m}>{mm}/{y}</option>;
+                  })}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-2">Modo</label>
+              <div className="inline-flex border border-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setMode("resumido")}
+                  className={`px-4 py-2 text-xs font-semibold transition-colors ${mode === "resumido" ? "bg-primary text-white" : "bg-white text-foreground hover:bg-muted/60"}`}
+                >
+                  Resumido
+                </button>
+                <button
+                  onClick={() => setMode("detalhado")}
+                  className={`px-4 py-2 text-xs font-semibold transition-colors ${mode === "detalhado" ? "bg-primary text-white" : "bg-white text-foreground hover:bg-muted/60"}`}
+                >
+                  Detalhado
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Relatório (printable) */}
+      {generated && (
+        <div id="report-output" className="glass-card p-8 print-area">
+          <header className="border-b-2 border-foreground pb-4 mb-6">
+            <h1 className="font-display text-2xl font-700 text-foreground">Relatório de Gastos</h1>
+            <div className="flex justify-between text-sm text-muted-foreground mt-2">
+              <span>Período: {periodLabel}</span>
+              <span>Emitido em: {todayLabel}</span>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Modo: {mode === "resumido" ? "Resumido" : "Detalhado"}
+              {selectedCats.size > 0 && ` · ${selectedCats.size} categoria(s) selecionada(s)`}
+            </div>
+          </header>
+
+          {grouped.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              Nenhum lançamento encontrado para os filtros aplicados.
+            </div>
+          ) : mode === "resumido" ? (
+            <table className="w-full text-sm report-table">
+              <thead>
+                <tr className="border-b border-foreground/30">
+                  <th className="text-left py-2 px-3 font-semibold">Categoria</th>
+                  <th className="text-right py-2 px-3 font-semibold">Total</th>
+                  <th className="text-right py-2 px-3 font-semibold">Itens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grouped.map((g) => (
+                  <tr key={g.category} className="border-b border-foreground/10">
+                    <td className="py-2 px-3">{g.category}</td>
+                    <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(g.total)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums">{g.items.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="space-y-6">
+              {grouped.map((g) => (
+                <section key={g.category} className="category-block">
+                  <h3 className="font-display text-base font-700 text-foreground border-b border-foreground/40 pb-1 mb-2">
+                    {g.category}
+                  </h3>
+                  <table className="w-full text-sm report-table">
+                    <thead>
+                      <tr className="border-b border-foreground/20">
+                        <th className="text-left py-1 px-2 font-semibold w-20">Data</th>
+                        <th className="text-left py-1 px-2 font-semibold">Descrição</th>
+                        <th className="text-right py-1 px-2 font-semibold w-28">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.items.map((t) => (
+                        <tr key={t.id} className="border-b border-foreground/5">
+                          <td className="py-1 px-2 tabular-nums">{t.date}</td>
+                          <td className="py-1 px-2">{t.description}</td>
+                          <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(t.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t border-foreground/30 font-semibold">
+                        <td className="py-1 px-2" colSpan={2}>Subtotal · {g.items.length} item(s)</td>
+                        <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(g.total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              ))}
+            </div>
+          )}
+
+          <footer className="border-t-2 border-foreground mt-6 pt-3 flex justify-between text-sm font-semibold">
+            <span>Total de lançamentos: {itemCount}</span>
+            <span>Total geral: {fmtBRL(grandTotal)}</span>
+          </footer>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          @page { margin: 1.5cm; }
+          body * { visibility: hidden !important; }
+          #report-output, #report-output * { visibility: visible !important; }
+          #report-output {
+            position: absolute !important;
+            left: 0; top: 0;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            color: black !important;
+            box-shadow: none !important;
+            border: none !important;
+            backdrop-filter: none !important;
+          }
+          #report-output * {
+            color: black !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            border-color: black !important;
+          }
+          .no-print { display: none !important; }
+          .category-block { page-break-inside: avoid; break-inside: avoid; }
+          .report-table thead tr { page-break-inside: avoid; }
+          .report-table tr { page-break-inside: avoid; }
+        }
+      `}</style>
+    </div>
+  );
+}
