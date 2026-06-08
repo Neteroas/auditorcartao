@@ -551,6 +551,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
         {tab === "parcelas"   && <FutureView future={future} />}
         {tab === "insights"   && <InsightsView insights={insights} />}
         {tab === "ledger"     && <LedgerView txs={txs} />}
+        {tab === "relatorios" && <ReportsView txs={txs} categoriesList={categoriesList} />}
       </div>
     </div>
   );
