@@ -1814,23 +1814,32 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                     <thead>
                       <tr className="border-b border-foreground/20">
                         <th className="text-left py-1 px-2 font-semibold w-20">Data</th>
+                        <th className="text-left py-1 px-2 font-semibold w-24">Fatura</th>
                         <th className="text-left py-1 px-2 font-semibold">Descrição</th>
                         <th className="text-right py-1 px-2 font-semibold w-28">Valor</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {g.items.map((t) => (
-                        <tr key={t.id} className="border-b border-foreground/5">
-                          <td className="py-1 px-2 tabular-nums">{t.date}</td>
-                          <td className="py-1 px-2">{t.description}</td>
-                          <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(t.amount)}</td>
-                        </tr>
-                      ))}
+                      {g.items.map((t) => {
+                        const ref = t.invoiceDueDate || extractDateFromFilename(t.source) || "";
+                        const MES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                        const [yy, mm] = ref ? ref.split("-") : ["", ""];
+                        const faturaLabel = yy && mm ? `${MES[Number(mm) - 1] ?? mm}/${yy}` : "—";
+                        return (
+                          <tr key={t.id} className="border-b border-foreground/5">
+                            <td className="py-1 px-2 tabular-nums">{t.date}</td>
+                            <td className="py-1 px-2 tabular-nums whitespace-nowrap">{faturaLabel}</td>
+                            <td className="py-1 px-2">{t.description}</td>
+                            <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(t.amount)}</td>
+                          </tr>
+                        );
+                      })}
                       <tr className="border-t border-foreground/30 font-semibold">
-                        <td className="py-1 px-2" colSpan={2}>Subtotal · {g.items.length} item(s)</td>
+                        <td className="py-1 px-2" colSpan={3}>Subtotal · {g.items.length} item(s)</td>
                         <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(g.total)}</td>
                       </tr>
                     </tbody>
+
                   </table>
                 </section>
               ))}
