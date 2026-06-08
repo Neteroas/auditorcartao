@@ -153,7 +153,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
   // Visão Geral metrics
   const totalJuros = positives.filter(t => t.category === "Tarifas").reduce((s, t) => s + t.amount, 0);
-  const totalAlim  = positives.filter(t => t.category === "Ifood / Restaurantes").reduce((s, t) => s + t.amount, 0);
+  const totalAlim  = positives.filter(t => t.category === "Ifood").reduce((s, t) => s + t.amount, 0);
   const totalTrans = positives.filter(t => t.category === "Transporte").reduce((s, t) => s + t.amount, 0);
   const totalAssinaturas   = positives.filter(t => t.category === "Assinaturas").reduce((s, t) => s + t.amount, 0);
   const totalComprasOnline = positives.filter(t => t.category === "Compras Online").reduce((s, t) => s + t.amount, 0);
@@ -582,7 +582,7 @@ function KpiTopBorder({ label, value, sub, color, valueColor, alert, icon: Icon 
 /* ── Categorias Icons Helper ── */
 const getCatIcon = (cat: string) => {
   switch (cat) {
-    case "Ifood / Restaurantes": return <Utensils className="size-3.5" />;
+    case "Ifood": return <Utensils className="size-3.5" />;
     case "Alimentação": return <Utensils className="size-3.5" />;
     case "Mercados / Panificadoras": return <ShoppingCart className="size-3.5" />;
     case "Transporte": return <CarFront className="size-3.5" />;
