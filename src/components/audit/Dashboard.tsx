@@ -45,7 +45,7 @@ const CHART_COLORS = [
   "oklch(0.68 0.13 120)",
 ];
 
-type Tab = "panorama" | "revisar" | "categorias" | "ranking" | "parcelas" | "insights" | "ledger";
+type Tab = "panorama" | "revisar" | "categorias" | "ranking" | "parcelas" | "insights" | "ledger" | "relatorios";
 
 export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAddCategory, onRenameCategory, summaries, onRemoveSource, headerActions }: Props) {
   const [tab, setTab] = useState<Tab>("panorama");
