@@ -248,6 +248,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
     { id: "parcelas",   label: "Parcelas",       icon: <CreditCard className="size-3.5" /> },
     { id: "insights",   label: "Insights",       icon: <Sparkles className="size-3.5" /> },
     { id: "ledger",     label: "Razão",          icon: <ChevronRight className="size-3.5" /> },
+    { id: "relatorios", label: "Relatórios",     icon: <FileText className="size-3.5" /> },
   ];
 
   return (
