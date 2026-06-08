@@ -728,10 +728,6 @@ function Index() {
 
         <footer className="mt-20 pt-6 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <span className="font-medium">Auditor · Auditoria Privada de Cartões</span>
-          <span className="flex items-center gap-1.5">
-            <Lock className="size-3" />
-            Processado no navegador · sem servidor · sem cookies
-          </span>
         </footer>
       </div>
 
