@@ -255,7 +255,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
     <div className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="font-display text-2xl md:text-3xl font-700 tracking-tight text-foreground">Parecer de Auditoria</h2>
+          <h2 className="font-display text-2xl md:text-3xl font-700 tracking-tight text-foreground">Parecer da Auditoria</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {invoiceSources.length > 0 && (

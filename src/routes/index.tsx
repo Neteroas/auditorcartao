@@ -41,7 +41,7 @@ export const Route = createFileRoute("/")(
     component: Index,
     head: () => ({
       meta: [
-        { title: "Auditor · Inteligência e Auditoria de Cartão de Crédito" },
+        { title: "Auditor de Cartões · Inteligência e Auditoria de Cartão de Crédito" },
         { name: "description", content: "Sistema sênior de auditoria financeira: extraia, categorize e analise suas faturas de cartão de crédito em PDF com gráficos, projeção de parcelas e insights inteligentes." },
       ],
       links: [
