@@ -253,7 +253,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
   return (
     <div className="mt-2">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 no-print">
         <div>
           <h2 className="font-display text-2xl md:text-3xl font-700 tracking-tight text-foreground">Parecer da Auditoria</h2>
         </div>
@@ -284,7 +284,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
 
       {/* ── VISÃO GERAL (KPIs em Cards com Borda Superior) ── */}
-      <div className="mb-8">
+      <div className="mb-8 no-print">
         <div className="flex items-center gap-2 mb-3.5">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Visão Geral · {months.length} Meses</p>
           <div className="h-px bg-border flex-1 ml-2 opacity-50" />
@@ -505,7 +505,7 @@ export function Dashboard({ txs, onClear, onUpdateCategory, categoriesList, onAd
 
 
 
-      <div className="flex items-center gap-1 p-1 bg-white border border-border/60 rounded-xl shadow-sm mb-8 overflow-x-auto">
+      <div className="flex items-center gap-1 p-1 bg-white border border-border/60 rounded-xl shadow-sm mb-8 overflow-x-auto no-print">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -1869,34 +1869,33 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
       <style>{`
         @media print {
           @page { margin: 1.5cm; size: A4; }
-          /* Hide everything first */
-          body * { visibility: hidden !important; }
-          /* Make only the report visible */
-          #report-output, #report-output * { visibility: visible !important; }
-          /* Use fixed positioning so the report starts at the very top of the
-             first physical page — avoids the blank first page caused by the
-             browser reserving space for the hidden .no-print elements above. */
+
+          /* Esconde header, KPIs, barra de abas e painel de filtros
+             (todos marcados com .no-print no JSX).
+             O #report-output fica no fluxo normal = paginação correta. */
+          .no-print { display: none !important; }
+
+          /* Limpa fundo e sombras do tema */
+          html, body { background: white !important; color: black !important; }
+
           #report-output {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            padding: 0 !important;
-            margin: 0 !important;
             background: white !important;
             color: black !important;
             box-shadow: none !important;
             border: none !important;
             backdrop-filter: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
           }
           #report-output * {
             color: black !important;
             background: transparent !important;
             box-shadow: none !important;
-            border-color: black !important;
+            border-color: #555 !important;
           }
-          .no-print { display: none !important; }
+
+          /* Evita corte de categorias e linhas no meio da página */
           .category-block { page-break-inside: avoid; break-inside: avoid; }
           .report-table thead tr { page-break-inside: avoid; }
           .report-table tr { page-break-inside: avoid; }
