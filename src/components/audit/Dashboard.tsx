@@ -1307,16 +1307,20 @@ function sortByDate(txs: RawTransaction[]): RawTransaction[] {
       if (!d || !m) return 0;
 
       let year = new Date().getFullYear(); // fallback
-      if (t.invoiceDueDate) {
-        const dueYear = Number(t.invoiceDueDate.slice(0, 4));
-        const dueMon = Number(t.invoiceDueDate.slice(5, 7));
+      const ref = t.invoiceDueDate || extractDateFromFilename(t.source);
+      if (ref) {
+        const dueYear = Number(ref.slice(0, 4));
+        const dueMon = Number(ref.slice(5, 7));
         // If the transaction month is AFTER the due month it belongs to the
         // previous calendar year (e.g. Dec purchases on a Jan invoice).
         year = m > dueMon ? dueYear - 1 : dueYear;
       }
       return year * 10000 + m * 100 + d;
     };
-    return toSortKey(a) - toSortKey(b);
+    const keyA = toSortKey(a);
+    const keyB = toSortKey(b);
+    if (keyA !== keyB) return keyA - keyB;
+    return (a.description || "").localeCompare(b.description || "");
   });
 }
 
@@ -1611,7 +1615,10 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
   const months = useMemo(() => {
     const set = new Set<string>();
     txs.forEach((t) => {
-      if (t.invoiceDueDate) set.add(t.invoiceDueDate.slice(0, 7));
+      const ref = t.invoiceDueDate || extractDateFromFilename(t.source);
+      if (ref && /^\d{4}-\d{2}/.test(ref)) {
+        set.add(ref.slice(0, 7));
+      }
     });
     return Array.from(set).sort();
   }, [txs]);
@@ -1620,7 +1627,17 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
   const [startMonth, setStartMonth] = useState<string>("all");
   const [endMonth, setEndMonth] = useState<string>("all");
   const [mode, setMode] = useState<"resumido" | "detalhado">("resumido");
+  const [includeFuture, setIncludeFuture] = useState(false);
   const [generated, setGenerated] = useState(false);
+
+  const futureInstallments = useMemo(() => {
+    const projected = projectFutureInstallments(txs);
+    return projected.filter((f) => {
+      if (startMonth !== "all" && f.month < startMonth) return false;
+      if (endMonth !== "all" && f.month > endMonth) return false;
+      return true;
+    });
+  }, [txs, startMonth, endMonth]);
 
   const toggleCat = (c: string) => {
     setSelectedCats((prev) => {
@@ -1636,7 +1653,8 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
     return txs.filter((t) => {
       if (selectedCats.size > 0 && !selectedCats.has(t.category)) return false;
       if (startMonth !== "all" || endMonth !== "all") {
-        const m = t.invoiceDueDate?.slice(0, 7);
+        const ref = t.invoiceDueDate || extractDateFromFilename(t.source);
+        const m = ref?.slice(0, 7);
         if (!m) return false;
         if (startMonth !== "all" && m < startMonth) return false;
         if (endMonth !== "all" && m > endMonth) return false;
@@ -1657,7 +1675,21 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
     return Array.from(map.entries())
       .map(([cat, list]) => ({
         category: cat,
-        items: sortByDate(list),
+        // Sort by invoice month (YYYY-MM) chronologically, then by day within the month
+        items: [...list].sort((a, b) => {
+          const refA = a.invoiceDueDate || extractDateFromFilename(a.source) || "";
+          const refB = b.invoiceDueDate || extractDateFromFilename(b.source) || "";
+          const monthA = refA.slice(0, 7); // YYYY-MM
+          const monthB = refB.slice(0, 7);
+          if (monthA !== monthB) return monthA.localeCompare(monthB);
+          // Same invoice month: sort by transaction day
+          const [dA, mA] = (a.date || "").split("/").map(Number);
+          const [dB, mB] = (b.date || "").split("/").map(Number);
+          const dayKeyA = (mA || 0) * 100 + (dA || 0);
+          const dayKeyB = (mB || 0) * 100 + (dB || 0);
+          if (dayKeyA !== dayKeyB) return dayKeyA - dayKeyB;
+          return (a.description || "").localeCompare(b.description || "");
+        }),
         total: list.reduce((s, t) => s + t.amount, 0),
       }))
       .sort((a, b) => b.total - a.total);
@@ -1780,6 +1812,25 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                 </button>
               </div>
             </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-2">Parcelas futuras</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeFuture}
+                  onChange={(e) => setIncludeFuture(e.target.checked)}
+                  className="accent-primary w-4 h-4"
+                />
+                <span className="text-sm text-foreground/80">Incluir no relatório</span>
+              </label>
+              {includeFuture && futureInstallments.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">Nenhuma parcela futura detectada.</p>
+              )}
+              {includeFuture && futureInstallments.length > 0 && (
+                <p className="text-[11px] text-primary mt-1">{futureInstallments.reduce((s, f) => s + f.items.length, 0)} parcela(s) em {futureInstallments.length} mês(es)</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1869,6 +1920,46 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
             <span>Total de lançamentos: {itemCount}</span>
             <span>Total geral: {fmtBRL(grandTotal)}</span>
           </footer>
+
+          {/* Parcelas futuras — seção imprimível */}
+          {includeFuture && futureInstallments.length > 0 && (
+            <section className="mt-8 pt-6 border-t-2 border-foreground">
+              <h2 className="font-display text-lg font-700 text-foreground mb-4">Parcelas Futuras Projetadas</h2>
+              {futureInstallments.map((f) => (
+                <div key={f.month} className="mb-6 category-block">
+                  <h3 className="font-display text-base font-700 text-foreground border-b border-foreground/40 pb-1 mb-2 capitalize">
+                    {f.label} — {fmtBRL(f.total)}
+                  </h3>
+                  <table className="w-full text-sm report-table">
+                    <thead>
+                      <tr className="border-b border-foreground/20">
+                        <th className="text-left py-1 px-2 font-semibold">Descrição</th>
+                        <th className="text-center py-1 px-2 font-semibold w-20">Parcela</th>
+                        <th className="text-right py-1 px-2 font-semibold w-28">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {f.items.map((it, i) => (
+                        <tr key={i} className="border-b border-foreground/5">
+                          <td className="py-1 px-2">{it.description}</td>
+                          <td className="py-1 px-2 text-center tabular-nums">{it.remaining}</td>
+                          <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(it.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t border-foreground/30 font-semibold">
+                        <td className="py-1 px-2" colSpan={2}>Subtotal · {f.items.length} parcela(s)</td>
+                        <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(f.total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+              <div className="border-t-2 border-foreground pt-3 flex justify-between text-sm font-semibold">
+                <span>Total parcelas futuras ({futureInstallments.reduce((s, f) => s + f.items.length, 0)} parcelas)</span>
+                <span>{fmtBRL(futureInstallments.reduce((s, f) => s + f.total, 0))}</span>
+              </div>
+            </section>
+          )}
         </div>
       )}
 
