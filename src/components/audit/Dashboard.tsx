@@ -584,15 +584,21 @@ const getCatIcon = (cat: string) => {
   switch (cat) {
     case "Ifood": return <Utensils className="size-3.5" />;
     case "Alimentação": return <Utensils className="size-3.5" />;
+    case "Restaurantes locais": return <Utensils className="size-3.5" />;
     case "Mercados / Panificadoras": return <ShoppingCart className="size-3.5" />;
     case "Transporte": return <CarFront className="size-3.5" />;
     case "Assinaturas": return <Tv className="size-3.5" />;
     case "Saúde": return <Stethoscope className="size-3.5" />;
+    case "Saúde (Farmácias)": return <Stethoscope className="size-3.5" />;
     case "Lazer": return <Ticket className="size-3.5" />;
     case "Educação": return <GraduationCap className="size-3.5" />;
     case "Serviços": return <Zap className="size-3.5" />;
+    case "Copel / Sanepar / Gás": return <Zap className="size-3.5" />;
     case "Telefonia (Planos/Aparelhos)": return <Smartphone className="size-3.5" />;
+    case "Recargas TIM": return <Smartphone className="size-3.5" />;
     case "Vestuário": return <Briefcase className="size-3.5" />;
+    case "Compras Lojas Locais": return <Tag className="size-3.5" />;
+    case "Boletos Div Pagos": return <FileText className="size-3.5" />;
     case "Tarifas": return <ShieldAlert className="size-3.5 text-destructive" />;
     case "Pagamentos/Créditos": return <CheckCircle2 className="size-3.5 text-emerald-600" />;
     default: return <CreditCard className="size-3.5" />;

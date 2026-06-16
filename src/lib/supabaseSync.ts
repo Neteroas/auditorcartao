@@ -462,9 +462,9 @@ export async function fixOnlinePurchasesByCity(userId: string) {
     console.log("Custom categories to preserve:", Array.from(customCategories));
     
     const DEFAULT_CATEGORIES = [
-      "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
-      "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Contas Básicas (Copel/Sanepar)", "Serviços",
-      "Telefonia (Planos/Aparelhos)", "Tarifas", "Pagamentos/Créditos", "Outros"
+      "Mercados / Panificadoras", "Compras Online", "Ifood", "Transporte", "Saúde (Farmácias)",
+      "Telefonia (Planos/Aparelhos)", "Tarifas", "Assinaturas", "Copel / Sanepar / Gás",
+      "Outros", "Pagamentos/Créditos"
     ];
     
     const CITY_PATTERNS = [
@@ -767,7 +767,7 @@ export async function fixCloudInvoiceDueDates(userId: string): Promise<{ updated
  */
 export async function bulkRecategorizeBasicBills(userId: string): Promise<{ updated: number }> {
   try {
-    const BASIC_BILLS_CATEGORY = "Contas Básicas (Copel/Sanepar)";
+    const BASIC_BILLS_CATEGORY = "Copel / Sanepar / Gás";
     // Fetch all transactions that are NOT already the target category
     const { data: txsData, error: fetchErr } = await supabase
       .from("card_transactions")

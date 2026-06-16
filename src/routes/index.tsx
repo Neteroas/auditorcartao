@@ -62,19 +62,28 @@ const CATEGORIES_KEY = "atelier-audit-categories-v1";
 const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
-  "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
-  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Contas Básicas (Copel/Sanepar)", "Serviços",
-  "Telefonia (Planos/Aparelhos)", "Tarifas", "Pagamentos/Créditos", "Outros"
+  "Mercados / Panificadoras", "Compras Online", "Ifood", "Transporte", "Saúde (Farmácias)",
+  "Telefonia (Planos/Aparelhos)", "Tarifas", "Assinaturas", "Copel / Sanepar / Gás",
+  "Outros", "Pagamentos/Créditos"
 ];
 
 const LOJAS_CLARO_FOZ_PATTERN = /lojasc?larofoz.*foz\s+do\s+iguac|foz\s+do\s+iguac.*lojasc?larofoz/i;
 const TELEFONIA_CATEGORY = "Telefonia (Planos/Aparelhos)";
 
 function normalizeHistoricTransactionCategory(t: RawTransaction): RawTransaction {
-  if (t.category === "Vestuário" && LOJAS_CLARO_FOZ_PATTERN.test(t.description)) {
-    return { ...t, category: TELEFONIA_CATEGORY };
+  let category = t.category;
+  if (category === "Mercado") {
+    category = "Mercados / Panificadoras";
+  } else if (category === "Vestuário" && LOJAS_CLARO_FOZ_PATTERN.test(t.description)) {
+    category = TELEFONIA_CATEGORY;
+  } else if (category === "Contas Básicas (Copel/Sanepar)") {
+    category = "Copel / Sanepar / Gás";
+  } else if (category === "Ifood / Restaurantes") {
+    category = "Ifood";
+  } else if (category === "Saúde") {
+    category = "Saúde (Farmácias)";
   }
-  return t;
+  return { ...t, category };
 }
 
 /** Fix transaction categories using the updated categorization logic.
@@ -135,6 +144,48 @@ function mergeCategories(
   return [...defaultCategories, ...Array.from(new Set([...customLocal, ...customCloud]))];
 }
 
+function filterActiveCategories(categories: string[], txs: RawTransaction[]): string[] {
+  // 1. Normalizar nomes
+  let normalized = categories.map((c) => {
+    if (c === "Mercado") return "Mercados / Panificadoras";
+    if (c === "Contas Básicas (Copel/Sanepar)") return "Copel / Sanepar / Gás";
+    if (c === "Ifood / Restaurantes") return "Ifood";
+    if (c === "Saúde") return "Saúde (Farmácias)";
+    return c;
+  });
+
+  // 2. Filtrar categorias vazias indesejadas
+  const categoriesWithData = new Set(txs.map((t) => t.category));
+  const emptyCategoriesToRemove = new Set([
+    "Ifood / Restaurantes",
+    "Alimentação",
+    "Saúde",
+    "Contas Básicas (Copel/Sanepar)",
+    "Duplicada-reaproveitar",
+    "Diversos",
+    "Vestuário",
+    "Lazer",
+    "Viagem",
+    "Educação",
+    "Serviços"
+  ]);
+
+  normalized = normalized.filter((c) => {
+    if (categoriesWithData.has(c)) return true;
+    if (emptyCategoriesToRemove.has(c)) return false;
+    return true;
+  });
+
+  // 3. Garantir os novos defaults
+  DEFAULT_CATEGORIES.forEach((c) => {
+    if (!normalized.includes(c)) {
+      normalized.push(c);
+    }
+  });
+
+  return Array.from(new Set(normalized));
+}
+
 function Index() {
   const [txs, setTxs] = useState<RawTransaction[]>([]);
   const [confirmPropagation, setConfirmPropagation] = useState<PropagationData | null>(null);
@@ -157,6 +208,7 @@ function Index() {
   const dedupDoneRef = useRef<boolean>(false);
 
   useEffect(() => {
+    let loadedTxs: RawTransaction[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -170,17 +222,8 @@ function Index() {
           }
         } catch {}
 
-        let loadedTxs = JSON.parse(raw);
-        loadedTxs = loadedTxs.map(sanitizeTransaction).map(fixInvoiceDueDate).map((t: any) => {
-          let tx = t;
-          if (tx.category === "Mercado") {
-            tx = { ...tx, category: "Mercados / Panificadoras" };
-          }
-          if (tx.category === "Vestuário" && LOJAS_CLARO_FOZ_PATTERN.test(tx.description)) {
-            tx = { ...tx, category: TELEFONIA_CATEGORY };
-          }
-          return tx;
-        });
+        loadedTxs = JSON.parse(raw);
+        loadedTxs = loadedTxs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction).map(fixInvoiceDueDate);
         // Apply the new categorization logic to fix categories (commented out to preserve manual categorization)
         // loadedTxs = fixLocalTransactionCategories(loadedTxs, customCats);
         setTxs(loadedTxs);
@@ -193,20 +236,9 @@ function Index() {
     try {
       const rawCats = localStorage.getItem(CATEGORIES_KEY);
       if (rawCats) {
-        let loaded = JSON.parse(rawCats);
-        loaded = loaded.map((c: string) => c === "Mercado" ? "Mercados / Panificadoras" : c);
-
-        if (!loaded.includes("Pagamentos/Créditos")) {
-          const idx = loaded.indexOf("Outros");
-          if (idx !== -1) loaded.splice(idx, 0, "Pagamentos/Créditos");
-          else loaded.push("Pagamentos/Créditos");
-        }
-        if (!loaded.includes("Ifood / Restaurantes")) {
-          const idx = loaded.indexOf("Alimentação");
-          if (idx !== -1) loaded.splice(idx, 0, "Ifood / Restaurantes");
-          else loaded.unshift("Ifood / Restaurantes");
-        }
-        setCategoriesList(loaded);
+        const parsed = JSON.parse(rawCats);
+        const cleaned = filterActiveCategories(parsed, loadedTxs);
+        setCategoriesList(cleaned);
       } else {
         setCategoriesList(DEFAULT_CATEGORIES);
       }
@@ -300,11 +332,11 @@ function Index() {
           console.log(`[sync] ${transportUpdated} transações recategorizadas para "Transporte".`);
         }
 
-        // Recategorize basic bills (Sanepar, Copel, etc.) to "Contas Básicas (Copel/Sanepar)" (one-time per session)
+        // Recategorize basic bills (Sanepar, Copel, etc.) to "Copel / Sanepar / Gás" (one-time per session)
         setCloudStatus("Corrigindo categorias de contas básicas...");
         const { updated: billsUpdated } = await bulkRecategorizeBasicBills(userId);
         if (billsUpdated > 0) {
-          console.log(`[sync] ${billsUpdated} transações recategorizadas para "Contas Básicas (Copel/Sanepar)".`);
+          console.log(`[sync] ${billsUpdated} transações recategorizadas para "Copel / Sanepar / Gás".`);
         }
 
         // Correct invoice due dates to end with 11 (one-time per session)
@@ -328,7 +360,7 @@ function Index() {
       setSummaries(cloud.summaries);
       
       const mergedCats = mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories);
-      setCategoriesList(mergedCats);
+      setCategoriesList(filterActiveCategories(mergedCats, normalizedTxs));
       setCloudStatus("Dados sincronizados com a nuvem");
     } catch (err: any) {
       setError(err?.message || "Não foi possível sincronizar com a nuvem.");
@@ -395,7 +427,7 @@ function Index() {
       const keptTxs = currentTxs.filter((t) => !reimportedSources.has(t.source));
       const keptKeys = new Set(keptTxs.map(txKey));
       const newUnique = all.filter((t) => !keptKeys.has(txKey(t)));
-      const updatedTxs = [...keptTxs, ...newUnique].map(fixInvoiceDueDate);
+      const updatedTxs = [...keptTxs, ...newUnique].map(normalizeHistoricTransactionCategory).map(fixInvoiceDueDate);
 
       const updatedSummaries = Object.keys(newSummaries).length > 0
         ? { ...currentSums, ...newSummaries }
@@ -424,9 +456,10 @@ function Index() {
           updatedSummaries,
           DEFAULT_CATEGORIES
         );
-        setTxs(cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction).map(fixInvoiceDueDate));
+        const mappedTxs = cloud.txs.map(normalizeHistoricTransactionCategory).map(sanitizeTransaction).map(fixInvoiceDueDate);
+        setTxs(mappedTxs);
         setSummaries(cloud.summaries);
-        setCategoriesList(mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories));
+        setCategoriesList(filterActiveCategories(mergeCategories(DEFAULT_CATEGORIES, currentCats, cloud.customCategories), mappedTxs));
         setCloudStatus("Dados sincronizados com a nuvem");
       }
     } catch (e: any) {
