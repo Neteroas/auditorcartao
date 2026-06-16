@@ -109,10 +109,35 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
   const now = new Date();
   const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  // Deduplicate: the same purchase appears in multiple invoices (PARC 02/11, 03/11, ...).
+  // Keep only the most recent installment (highest current) so we project only the
+  // truly remaining parcelas without generating duplicates per future month.
+  //
+  // Purchase identity key: normalized description (remove the "XX/YY" installment token)
+  //   + total installments + amount value.
+  const latestByPurchase = new Map<string, RawTransaction>();
+
   for (const t of txs) {
     if (!t.installment) continue;
     if (/ANUIDADE\s+DIFERENCIADA|DESC\s+AUTOMATICO\s+ANUD/i.test(t.description)) continue;
     const { current, total } = t.installment;
+    // Strip "DD/NN" installment tokens from description to get the base product name
+    const normalizedDesc = t.description
+      .replace(/\b\d{1,2}\/\d{2,3}\b/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    const purchaseKey = `${normalizedDesc}|${total}|${t.amount.toFixed(2)}`;
+
+    const existing = latestByPurchase.get(purchaseKey);
+    // Keep the record with the highest installment number (most recent)
+    if (!existing || current > existing.installment!.current) {
+      latestByPurchase.set(purchaseKey, t);
+    }
+  }
+
+  // Project future installments only from the latest known installment of each purchase
+  for (const t of latestByPurchase.values()) {
+    const { current, total } = t.installment!;
     const remaining = total - current;
     if (remaining <= 0) continue;
     const baseDate = getTransactionDate(t);
