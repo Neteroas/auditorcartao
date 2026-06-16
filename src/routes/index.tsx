@@ -8,6 +8,7 @@ import { AuthModal } from "@/components/audit/AuthModal";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 import {
   addCategoryToCloud,
+  bulkRecategorizeBasicBills,
   bulkRecategorizeTransport,
   bulkUpdateCategoryByIds,
   clearAllCloudData,
@@ -62,8 +63,8 @@ const SUMMARIES_KEY = "atelier-audit-summaries-v1";
 
 export const DEFAULT_CATEGORIES = [
   "Ifood / Restaurantes", "Alimentação", "Mercados / Panificadoras", "Transporte", "Assinaturas", "Compras Online",
-  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Serviços", "Telefonia (Planos/Aparelhos)", "Tarifas",
-  "Pagamentos/Créditos", "Outros"
+  "Saúde", "Vestuário", "Lazer", "Viagem", "Educação", "Contas Básicas (Copel/Sanepar)", "Serviços",
+  "Telefonia (Planos/Aparelhos)", "Tarifas", "Pagamentos/Créditos", "Outros"
 ];
 
 const LOJAS_CLARO_FOZ_PATTERN = /lojasc?larofoz.*foz\s+do\s+iguac|foz\s+do\s+iguac.*lojasc?larofoz/i;
@@ -297,6 +298,13 @@ function Index() {
         const { updated: transportUpdated } = await bulkRecategorizeTransport(userId);
         if (transportUpdated > 0) {
           console.log(`[sync] ${transportUpdated} transações recategorizadas para "Transporte".`);
+        }
+
+        // Recategorize basic bills (Sanepar, Copel, etc.) to "Contas Básicas (Copel/Sanepar)" (one-time per session)
+        setCloudStatus("Corrigindo categorias de contas básicas...");
+        const { updated: billsUpdated } = await bulkRecategorizeBasicBills(userId);
+        if (billsUpdated > 0) {
+          console.log(`[sync] ${billsUpdated} transações recategorizadas para "Contas Básicas (Copel/Sanepar)".`);
         }
 
         // Correct invoice due dates to end with 11 (one-time per session)

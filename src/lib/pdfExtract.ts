@@ -52,13 +52,15 @@ const CATEGORIES: { name: string; keywords: RegExp }[] = [
   { name: "Transporte", keywords: /\buber\s*\*|\buber\b(?!\s?eats)|99\s?app|99pop|cabify|taxi|metro|estacion|posto|shell|ipiranga|petrobr|combust|gasolina|\b99\b/i },
   // Assinaturas: Google, Netflix, etc.
   { name: "Assinaturas", keywords: /netflix|spotify|amazon\s?prime|disney|hbo|youtube|apple\.com|icloud|google|microsoft|adobe|chatgpt|openai|claude|anthropic|dl\s*\*?\s*google|google\s*play/i },
-  { name: "Saúde", keywords: /farma|drogaria|drogasil|pacheco|raia|hospital|clinica|laborat|dentist|psico/i },
-  { name: "Telefonia (Planos/Aparelhos)", keywords: /tim|vivo|claro|oi\s+br|net\b|sky|enel|cemig|sabesp|copasa|cpfl|telecom|telefon/i },
+  { name: "Saúde (Farmácias)", keywords: /farma|drogaria|drogasil|pacheco|raia|hospital|clinica|laborat|dentist|psico/i },
+  { name: "Telefonia (Planos/Aparelhos)", keywords: /tim|vivo|claro|oi\s+br|net\b|sky|telecom|telefon/i },
   { name: "Vestuário", keywords: /zara|renner|cea|c&a|riachuelo|nike|adidas|centauro|loja|fashion|hering/i },
   { name: "Lazer", keywords: /cinema|ingresso|show|teatro|park|\bbar\s|pub|cervej|steam|playstation|xbox|nintendo/i },
   { name: "Viagem", keywords: /hotel|airbnb|booking|decolar|latam|gol|azul|smiles|cvc|hertz|localiza/i },
   { name: "Educação", keywords: /udemy|coursera|alura|hotmart|curso|escola|faculdade|colegio/i },
-  { name: "Serviços", keywords: /tim|vivo|claro|\boi\s|\bnet\b|sky|enel|cemig|sabesp|sanepar|copasa|cpfl|seguro|condominio|aluguel|saneam|agua\s*pota|fornec.*agua/i },
+  // Contas Básicas: água, energia, gás, saneamento — vem ANTES de Serviços para capturar primeiro
+  { name: "Contas Básicas (Copel/Sanepar)", keywords: /sanepar|copel|\bcemar\b|\bcemig\b|\bcopasa\b|\bcpfl\b|\bsabesp\b|\benel\b|\bcoelba\b|\bcoelce\b|\bcelesc\b|\bcelpe\b|\blight\b|\bcomgas\b|\bcelg\b|\bceee\b|\benergisp\b|saneam|agua\s*pota|fornec.*agua|dist.*energia|dist.*agua|concessionaria/i },
+  { name: "Serviços", keywords: /seguro|condominio|aluguel|cartorio|registro|manutenc|assist|tecnico/i },
   { name: "Tarifas", keywords: /anuidade|tarifa|iof|juros|encargo|multa|seguro\s?cart/i },
   { name: "Pagamentos/Créditos", keywords: /pagamento|cr[eé]dito|estorno|reembolso|cashback|devolu/i },
 ];

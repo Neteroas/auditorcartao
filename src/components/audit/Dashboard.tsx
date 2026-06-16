@@ -1293,11 +1293,24 @@ function exportCSV(txs: RawTransaction[], filename: string) {
 /* ── Sort transactions by dd/mm numerically ── */
 function sortByDate(txs: RawTransaction[]): RawTransaction[] {
   return [...txs].sort((a, b) => {
-    const parseDD = (date: string) => {
-      const [d, m] = date.split("/").map(Number);
-      return (m || 0) * 100 + (d || 0);
+    // Build a sortable timestamp using invoiceDueDate year + DD/MM day/month.
+    // Transactions store date as "DD/MM" without year; invoiceDueDate (YYYY-MM-DD)
+    // gives us the correct year even when a statement spans a year boundary.
+    const toSortKey = (t: RawTransaction): number => {
+      const [d, m] = (t.date || "").split("/").map(Number);
+      if (!d || !m) return 0;
+
+      let year = new Date().getFullYear(); // fallback
+      if (t.invoiceDueDate) {
+        const dueYear = Number(t.invoiceDueDate.slice(0, 4));
+        const dueMon = Number(t.invoiceDueDate.slice(5, 7));
+        // If the transaction month is AFTER the due month it belongs to the
+        // previous calendar year (e.g. Dec purchases on a Jan invoice).
+        year = m > dueMon ? dueYear - 1 : dueYear;
+      }
+      return year * 10000 + m * 100 + d;
     };
-    return parseDD(a.date) - parseDD(b.date);
+    return toSortKey(a) - toSortKey(b);
   });
 }
 
@@ -1855,13 +1868,20 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
 
       <style>{`
         @media print {
-          @page { margin: 1.5cm; }
+          @page { margin: 1.5cm; size: A4; }
+          /* Hide everything first */
           body * { visibility: hidden !important; }
+          /* Make only the report visible */
           #report-output, #report-output * { visibility: visible !important; }
+          /* Use fixed positioning so the report starts at the very top of the
+             first physical page — avoids the blank first page caused by the
+             browser reserving space for the hidden .no-print elements above. */
           #report-output {
-            position: absolute !important;
-            left: 0; top: 0;
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
+            height: auto !important;
             padding: 0 !important;
             margin: 0 !important;
             background: white !important;
