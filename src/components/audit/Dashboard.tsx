@@ -1649,6 +1649,9 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
   const clearAll = () => setSelectedCats(new Set());
 
   const filtered = useMemo(() => {
+    if (includeFuture && selectedCats.size === 0) {
+      return [];
+    }
     return txs.filter((t) => {
       if (selectedCats.size > 0 && !selectedCats.has(t.category)) return false;
       if (startMonth !== "all" || endMonth !== "all") {
@@ -1663,7 +1666,7 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
       if (t.amount <= 0) return false;
       return true;
     });
-  }, [txs, selectedCats, startMonth, endMonth]);
+  }, [txs, selectedCats, startMonth, endMonth, includeFuture]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, RawTransaction[]>();
@@ -1761,7 +1764,9 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
               )}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {selectedCats.size === 0 ? "Nenhuma selecionada = todas." : `${selectedCats.size} selecionada(s)`}
+              {selectedCats.size === 0 
+                ? (includeFuture ? "Exibindo apenas parcelas futuras." : "Nenhuma selecionada = todas.") 
+                : `${selectedCats.size} selecionada(s)`}
             </p>
           </div>
 
@@ -1845,12 +1850,16 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               Modo: {mode === "resumido" ? "Resumido" : "Detalhado"}
-              {selectedCats.size > 0 && ` · ${selectedCats.size} categoria(s) selecionada(s)`}
+              {selectedCats.size > 0 
+                ? ` · ${selectedCats.size} categoria(s) selecionada(s)` 
+                : includeFuture 
+                ? " · Apenas parcelas futuras" 
+                : ""}
             </div>
           </header>
 
-          {grouped.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
+          {grouped.length === 0 && !(includeFuture && futureInstallments.length > 0) ? (
+            <div className="text-center py-12 text-muted-foreground text-sm no-print">
               Nenhum lançamento encontrado para os filtros aplicados.
             </div>
           ) : mode === "resumido" ? (
@@ -1929,7 +1938,7 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
 
           {/* Parcelas futuras — seção detalhada, apenas em modo detalhado */}
           {includeFuture && mode === "detalhado" && futureInstallments.length > 0 && (
-            <section className="mt-8 pt-6 border-t-2 border-foreground">
+            <section className={grouped.length > 0 ? "mt-8 pt-6 border-t-2 border-foreground" : ""}>
               <h2 className="font-display text-lg font-700 text-foreground mb-4">Parcelas Futuras Projetadas</h2>
               {futureInstallments.map((f) => (
                 <div key={f.month} className="mb-6 category-block">
