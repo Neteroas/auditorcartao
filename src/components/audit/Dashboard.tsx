@@ -1870,6 +1870,13 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                     <td className="py-2 px-3 text-right tabular-nums">{g.items.length}</td>
                   </tr>
                 ))}
+                {includeFuture && futureInstallments.length > 0 && (
+                  <tr className="border-b border-foreground/10 font-medium">
+                    <td className="py-2 px-3 italic text-muted-foreground">Parcelas Futuras Projetadas</td>
+                    <td className="py-2 px-3 text-right tabular-nums italic text-muted-foreground">{fmtBRL(futureInstallments.reduce((s, f) => s + f.total, 0))}</td>
+                    <td className="py-2 px-3 text-right tabular-nums italic text-muted-foreground">{futureInstallments.reduce((s, f) => s + f.items.length, 0)}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           ) : (
@@ -1920,8 +1927,8 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
             <span>Total geral: {fmtBRL(grandTotal)}</span>
           </footer>
 
-          {/* Parcelas futuras — seção imprimível */}
-          {includeFuture && futureInstallments.length > 0 && (
+          {/* Parcelas futuras — seção detalhada, apenas em modo detalhado */}
+          {includeFuture && mode === "detalhado" && futureInstallments.length > 0 && (
             <section className="mt-8 pt-6 border-t-2 border-foreground">
               <h2 className="font-display text-lg font-700 text-foreground mb-4">Parcelas Futuras Projetadas</h2>
               {futureInstallments.map((f) => (
