@@ -1694,8 +1694,11 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
       .sort((a, b) => b.total - a.total);
   }, [filtered]);
 
-  const grandTotal = grouped.reduce((s, g) => s + g.total, 0);
-  const itemCount = filtered.length;
+  const futureTotalAmount = includeFuture ? futureInstallments.reduce((s, f) => s + f.total, 0) : 0;
+  const futureItemsCount = includeFuture ? futureInstallments.reduce((s, f) => s + f.items.length, 0) : 0;
+
+  const grandTotal = grouped.reduce((s, g) => s + g.total, 0) + futureTotalAmount;
+  const itemCount = filtered.length + futureItemsCount;
 
   const periodLabel = (() => {
     if (startMonth === "all" && endMonth === "all") return "Todos os períodos";
@@ -1870,6 +1873,13 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                     <td className="py-2 px-3 text-right tabular-nums">{g.items.length}</td>
                   </tr>
                 ))}
+                {includeFuture && futureInstallments.length > 0 && (
+                  <tr className="border-b border-foreground/10 font-medium bg-primary/[0.02]">
+                    <td className="py-2 px-3 text-primary">Parcelas Futuras Projetadas</td>
+                    <td className="py-2 px-3 text-right tabular-nums text-primary">{fmtBRL(futureTotalAmount)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums text-primary">{futureItemsCount}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           ) : (
@@ -1920,8 +1930,8 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
             <span>Total geral: {fmtBRL(grandTotal)}</span>
           </footer>
 
-          {/* Parcelas futuras — seção imprimível */}
-          {includeFuture && futureInstallments.length > 0 && (
+          {/* Parcelas futuras — seção imprimível (apenas em modo detalhado) */}
+          {includeFuture && mode === "detalhado" && futureInstallments.length > 0 && (
             <section className="mt-8 pt-6 border-t-2 border-foreground">
               <h2 className="font-display text-lg font-700 text-foreground mb-4">Parcelas Futuras Projetadas</h2>
               {futureInstallments.map((f) => (
