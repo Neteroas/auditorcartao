@@ -1976,7 +1976,8 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
              O #report-output fica no fluxo normal = paginação correta. */
           .no-print { display: none !important; }
 
-          /* Limpa fundo e sombras do tema */
+          /* Limpa fundo, sombras do tema e reduz a fonte em 10% */
+          html { font-size: 90% !important; }
           html, body { background: white !important; color: black !important; }
 
           #report-output {
@@ -1996,8 +1997,9 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
             border-color: #555 !important;
           }
 
-          /* Evita corte de categorias e linhas no meio da página */
-          .category-block { page-break-inside: avoid; break-inside: avoid; }
+          /* Evita corte de linhas individuais no meio da página e mantém cabeçalhos */
+          .category-block h3 { page-break-after: avoid; break-after: avoid; }
+          .report-table thead { page-break-after: avoid; break-after: avoid; }
           .report-table thead tr { page-break-inside: avoid; }
           .report-table tr { page-break-inside: avoid; }
         }
