@@ -101,7 +101,7 @@ export interface FutureInstallment {
   month: string;
   label: string;
   total: number;
-  items: { description: string; amount: number; remaining: string }[];
+  items: { description: string; amount: number; remaining: string; originalInstallment: string }[];
 }
 
 export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallment[] {
@@ -128,9 +128,9 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
 
     const { current, total } = t.installment;
 
-    // Strip "DD/NN" installment token from the description ("04/11", "02/06" …)
+    // Strip installment token from the description ("04/11", "02 de 06", "PARC 04/11" …)
     const normalizedDesc = t.description
-      .replace(/\b\d{1,2}\/\d{2,3}\b/g, "")
+      .replace(/\b(?:PARC[A-Z]*\.?\s*)?\d{1,2}\s?(?:\/|de)\s?\d{1,2}\b/gi, "")
       .replace(/\s{2,}/g, " ")
       .trim();
 
@@ -174,11 +174,24 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
         });
       }
       const f = map.get(key)!;
+      const projectedInstallment = `${String(current + i).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
+      const originalInstallment = `${String(current).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
+      // Replace the embedded installment token in the description with the projected one, preserving formatting style
+      const projectedDescription = t.description.replace(
+        /\b(?:PARC[A-Z]*\.?\s*)?\d{1,2}\s?(?:\/|de)\s?\d{1,2}\b/i,
+        (matched) => {
+          const separator = matched.toLowerCase().includes("de") ? " de " : "/";
+          const hasParc = /parc/i.test(matched);
+          const parcPrefix = hasParc ? matched.match(/parc[a-z]*\.?\s*/i)?.[0] || "PARC " : "";
+          return `${parcPrefix}${String(current + i).padStart(2, "0")}${separator}${String(total).padStart(2, "0")}`;
+        }
+      );
       f.total += t.amount;
       f.items.push({
-        description: t.description,
+        description: projectedDescription,
         amount: t.amount,
-        remaining: `${current + i}/${total}`,
+        remaining: projectedInstallment,
+        originalInstallment,
       });
     }
   }

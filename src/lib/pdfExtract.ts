@@ -171,7 +171,7 @@ const AMOUNT_TOKEN_PATTERN = String.raw`-?\s?(?:R\$\s?)?\d{1,9}(?:\.\d{3})*,\d{2
 const TRANSACTION_LINE_RE = new RegExp(`(${DATE_TOKEN_PATTERN})\\s+(.+?)\\s+(${AMOUNT_TOKEN_PATTERN})(?=\\s|$)`, "gi");
 const BLOCK_START_RE = new RegExp(`^\\s*(${DATE_TOKEN_PATTERN})(?:\\s+(${DATE_TOKEN_PATTERN}))?(?:\\s+|$)`, "i");
 const AMOUNT_GLOBAL_RE = new RegExp(AMOUNT_TOKEN_PATTERN, "gi");
-const INSTALLMENT_RE = /\bPARC[A-Z]*\.?\s*(\d{1,2})\s?\/\s?(\d{1,2})/i;
+const INSTALLMENT_RE = /\b(?:PARC[A-Z]*\.?\s*)?(\d{1,2})\s?(?:\/|de)\s?(\d{1,2})\b/i;
 const TRANSACTION_BLOCK_BREAK_RE = /^(?:resumo\b|lan[\xE7c]amentos?\b|data\b|descri[\xE7c][\xE3a]o\b|valor\b|saldo\s+(?:anterior|para)\b|pagamentos?\b|cr[\xE9e]ditos?\b|compras?\s+(?:nacionais?|internacionais?)\b|tarifas?\b|encargos?\b|juros\b|total\b|limite\b|per[\xED]odo\b|refer[\xEA|e]ncia\b|fatura\s+de\b|compet[\xEA|e]ncia\b|m[\xEA|e]s\s+de\b)/i;
 const IGNORED_DESCRIPTION_RE = /^(?:total\s+(?:da\s+)?fatura|saldo\s+para\s+pr[oó]xima|limite\s+(?:total|dispon[ií]vel|utilizado)|data\s+descri[çc][aã]o\s+valor|data\s+lan[çc]amento|descri[çc][aã]o\s+do\s+lan[çc]amento|pagamento\s+recebido|saldo\s+anterior|compras?\s+(?:nacionais?|internacionais?)|tarifas?\s+e\s+encargos?|total\s+a\s+pagar|fatura\s+atual|fatura\s+anterior|valor\s+da\s+fatura|encargos?\s+do\s+m[eê]s|encargos?\s+financeiros?)$/i;
 
