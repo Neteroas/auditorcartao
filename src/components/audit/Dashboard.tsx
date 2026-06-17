@@ -1694,8 +1694,8 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
       .sort((a, b) => b.total - a.total);
   }, [filtered]);
 
-  const grandTotal = grouped.reduce((s, g) => s + g.total, 0);
-  const itemCount = filtered.length;
+  const grandTotal = grouped.reduce((s, g) => s + g.total, 0) + (includeFuture ? futureInstallments.reduce((s, f) => s + f.total, 0) : 0);
+  const itemCount = filtered.length + (includeFuture ? futureInstallments.reduce((s, f) => s + f.items.length, 0) : 0);
 
   const periodLabel = (() => {
     if (startMonth === "all" && endMonth === "all") return "Todos os períodos";
