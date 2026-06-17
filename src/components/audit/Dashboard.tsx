@@ -1131,7 +1131,6 @@ function FutureView({ future }: { future: ReturnType<typeof projectFutureInstall
               <div key={i} className="flex items-center justify-between px-6 py-3 hover:bg-muted/20 transition-colors">
                 <span className="text-xs text-foreground/80 truncate pr-4">
                   {it.description}
-                  <span className="ml-2 pill text-[9px] px-1.5 py-0.5">{it.remaining}</span>
                 </span>
                 <span className="tabular text-xs font-semibold text-muted-foreground flex-shrink-0">{fmtBRL(it.amount)}</span>
               </div>
