@@ -603,7 +603,7 @@ function Index() {
   return (
     <div className="min-h-screen bg-background text-foreground grain">
       {/* Top navigation bar */}
-      <nav className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-xl backdrop-saturate-150">
+      <nav className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-xl backdrop-saturate-150 no-print">
         <div className="max-w-7xl mx-auto px-6 md:px-12 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="size-7 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/30">
@@ -728,7 +728,7 @@ function Index() {
             
             {/* Aviso se não logado e tem dados */}
             {!user && supabaseEnabled && hasImportedData && (
-              <div className="mb-6 border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm">
+              <div className="mb-6 border border-amber-500/25 bg-amber-500/5 p-4 rounded-sm no-print">
                 <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Dados locais apenas</p>
                 <p className="text-xs text-amber-700/80 mb-3">
                   Seus dados estão salvos apenas neste navegador. Faça login para sincronizar com sua conta e acessar em outros dispositivos.
@@ -767,7 +767,7 @@ function Index() {
           </section>
         )}
 
-        <footer className="mt-20 pt-6 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+        <footer className="mt-20 pt-6 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground no-print">
           <span className="font-medium">Auditor · Auditoria Privada de Cartões</span>
         </footer>
       </div>

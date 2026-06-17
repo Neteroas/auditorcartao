@@ -250,3 +250,9 @@
     border-color: oklch(0.60 0.20 25 / 0.18);
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
