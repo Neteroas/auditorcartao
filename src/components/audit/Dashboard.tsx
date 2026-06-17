@@ -1129,20 +1129,9 @@ function FutureView({ future }: { future: ReturnType<typeof projectFutureInstall
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-border/25 border-t border-border/30">
             {f.items.map((it, i) => (
               <div key={i} className="flex items-center justify-between px-6 py-3 hover:bg-muted/20 transition-colors">
-                <div className="flex items-center gap-2 min-w-0 flex-1 pr-4">
-                  <span className="text-xs text-foreground/80 truncate">
-                    {it.description}
-                  </span>
-                  <span className="flex items-center gap-1 flex-shrink-0">
-                    <span className="pill text-[9px] bg-muted text-muted-foreground/80 px-1.5 py-0.5 border border-border/30">
-                      Fat: {it.originalInstallment}
-                    </span>
-                    <span className="text-muted-foreground text-[8px]">➔</span>
-                    <span className="pill text-[9px] pill-primary bg-primary/10 text-primary px-1.5 py-0.5 font-bold border border-primary/20">
-                      Proj: {it.remaining}
-                    </span>
-                  </span>
-                </div>
+                <span className="text-xs text-foreground/80 truncate pr-4">
+                  {it.description}
+                </span>
                 <span className="tabular text-xs font-semibold text-muted-foreground flex-shrink-0">{fmtBRL(it.amount)}</span>
               </div>
             ))}
@@ -1944,9 +1933,6 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                     <thead>
                       <tr className="border-b border-foreground/20">
                         <th className="text-left py-1 px-2 font-semibold">Descrição</th>
-                        <th className="text-center py-1 px-2 font-semibold w-24">Parc. Fatura</th>
-                        <th className="text-center py-1 px-2 font-semibold w-6"></th>
-                        <th className="text-center py-1 px-2 font-semibold w-24">Parc. Projetada</th>
                         <th className="text-right py-1 px-2 font-semibold w-28">Valor</th>
                       </tr>
                     </thead>
@@ -1954,14 +1940,11 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
                       {f.items.map((it, i) => (
                         <tr key={i} className="border-b border-foreground/5">
                           <td className="py-1 px-2">{it.description}</td>
-                          <td className="py-1 px-2 text-center tabular-nums text-muted-foreground/80">{it.originalInstallment}</td>
-                          <td className="py-1 px-2 text-center text-muted-foreground/60">➔</td>
-                          <td className="py-1 px-2 text-center tabular-nums font-semibold text-primary">{it.remaining}</td>
                           <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(it.amount)}</td>
                         </tr>
                       ))}
                       <tr className="border-t border-foreground/30 font-semibold">
-                        <td className="py-1 px-2" colSpan={4}>Subtotal · {f.items.length} parcela(s)</td>
+                        <td className="py-1 px-2">Subtotal · {f.items.length} parcela(s)</td>
                         <td className="py-1 px-2 text-right tabular-nums">{fmtBRL(f.total)}</td>
                       </tr>
                     </tbody>
