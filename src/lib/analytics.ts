@@ -109,48 +109,68 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
   const now = new Date();
   const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // Deduplicate: the same purchase appears in multiple invoices (PARC 02/11, 03/11, ...).
-  // Keep only the most recent installment (highest current) so we project only the
-  // truly remaining parcelas without generating duplicates per future month.
+  // ── Deduplication ────────────────────────────────────────────────────────────
+  // The same purchase appears once per invoice (PARC 01/11, 02/11, 03/11 …).
+  // We keep only the most-recent installment so each purchase projects its truly
+  // remaining future months exactly once.
   //
-  // Purchase identity key: normalized description (remove the "XX/YY" installment token)
-  //   + total installments + amount value.
+  // Key = normalizedDescription + total + Math.round(amount)
+  //   • Math.round handles the cent-level rounding that makes the same purchase
+  //     appear as R$19.32 in one invoice and R$19.34 in another.
+  //   • Keeping the rounded amount ensures two genuinely different purchases from
+  //     the same merchant (e.g. two iFood plans with different values) stay separate.
   const latestByPurchase = new Map<string, RawTransaction>();
 
   for (const t of txs) {
     if (!t.installment) continue;
+    if (!t.invoiceDueDate) continue; // need invoice month for correct projection
     if (/ANUIDADE\s+DIFERENCIADA|DESC\s+AUTOMATICO\s+ANUD/i.test(t.description)) continue;
+
     const { current, total } = t.installment;
-    // Strip "DD/NN" installment tokens from description to get the base product name
+
+    // Strip "DD/NN" installment token from the description ("04/11", "02/06" …)
     const normalizedDesc = t.description
       .replace(/\b\d{1,2}\/\d{2,3}\b/g, "")
       .replace(/\s{2,}/g, " ")
       .trim();
-    // Key uses only normalized description + total (NOT amount, which varies between installments)
-    const purchaseKey = `${normalizedDesc}|${total}`;
+
+    const purchaseKey = `${normalizedDesc}|${total}|${Math.round(t.amount)}`;
 
     const existing = latestByPurchase.get(purchaseKey);
-    // Keep the record with the highest installment number (most recent)
     if (!existing || current > existing.installment!.current) {
       latestByPurchase.set(purchaseKey, t);
     }
   }
 
-  // Project future installments only from the latest known installment of each purchase
+  // ── Projection ───────────────────────────────────────────────────────────────
+  // Base = the invoice month (invoiceDueDate), NOT the transaction date.
+  // If "PARC 04/11" is on the June-2026 invoice, the next charge (5/11) falls in
+  // July-2026, the one after (6/11) in August-2026, and so on.  Projecting from
+  // the transaction date (e.g. "05/02") was adding 4 extra phantom months.
   for (const t of latestByPurchase.values()) {
     const { current, total } = t.installment!;
     const remaining = total - current;
     if (remaining <= 0) continue;
-    const baseDate = getTransactionDate(t);
+
+    // Parse invoice month: invoiceDueDate is "YYYY-MM-DD" or "YYYY-MM"
+    const invY = Number(t.invoiceDueDate!.slice(0, 4));
+    const invM = Number(t.invoiceDueDate!.slice(5, 7)); // 1-indexed
+
     for (let i = 1; i <= remaining; i++) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      // Advance i months from the invoice month
+      const absMonth = invY * 12 + (invM - 1) + i; // 0-indexed absolute month
+      const projY = Math.floor(absMonth / 12);
+      const projM = (absMonth % 12) + 1; // back to 1-indexed
+      const key = `${projY}-${String(projM).padStart(2, "0")}`;
       if (key <= currentYearMonth) continue;
+
       if (!map.has(key)) {
+        const d = new Date(projY, projM - 1, 1);
         map.set(key, {
           month: key,
           label: d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
-          total: 0, items: [],
+          total: 0,
+          items: [],
         });
       }
       const f = map.get(key)!;
@@ -162,6 +182,7 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
       });
     }
   }
+
   return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
 }
 
