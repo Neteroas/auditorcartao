@@ -1976,9 +1976,20 @@ function ReportsView({ txs, categoriesList }: { txs: RawTransaction[]; categorie
              O #report-output fica no fluxo normal = paginação correta. */
           .no-print { display: none !important; }
 
-          /* Limpa fundo, sombras do tema e reduz a fonte em 10% */
-          html { font-size: 90% !important; }
+          /* Limpa fundo, sombras do tema e reduz a fonte em 20% (font-size 80%) */
+          html { font-size: 80% !important; }
           html, body { background: white !important; color: black !important; }
+
+          /* Reseta espaçamentos de wrappers de layout externos para respeitar margem de 1.5cm */
+          .min-h-screen,
+          .min-h-screen > div {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+            width: 100% !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
 
           #report-output {
             background: white !important;
