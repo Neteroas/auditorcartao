@@ -126,7 +126,8 @@ export function projectFutureInstallments(txs: RawTransaction[]): FutureInstallm
       .replace(/\b\d{1,2}\/\d{2,3}\b/g, "")
       .replace(/\s{2,}/g, " ")
       .trim();
-    const purchaseKey = `${normalizedDesc}|${total}|${t.amount.toFixed(2)}`;
+    // Key uses only normalized description + total (NOT amount, which varies between installments)
+    const purchaseKey = `${normalizedDesc}|${total}`;
 
     const existing = latestByPurchase.get(purchaseKey);
     // Keep the record with the highest installment number (most recent)
